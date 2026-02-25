@@ -49,6 +49,26 @@ export async function getMoviesByCategory(
 }
 
 /**
+ * Lấy danh sách phim theo thể loại (hanh-dong, tinh-cam, etc.)
+ */
+export async function getMoviesByGenre(
+  genreSlug: string,
+  page: number = 1,
+): Promise<ApiListResponse | null> {
+  try {
+    const res = await fetch(`${API_DOMAIN}/v1/api/the-loai/${genreSlug}?page=${page}`, {
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.data || data; // tuỳ biến theo format trả về
+  } catch (error) {
+    console.error(`Lỗi khi fetch thể loại ${genreSlug}:`, error);
+    return null;
+  }
+}
+
+/**
  * Lấy chi tiết phim
  */
 export async function getMovieDetail(slug: string): Promise<ApiDetailResponse | null> {

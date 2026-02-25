@@ -3,14 +3,14 @@
 import { useState } from 'react';
 import Image, { ImageProps } from 'next/image';
 
-const fallbackSvg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+const fallbackSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
   <rect width="100%" height="100%" fill="#27272a" />
   <text x="50%" y="50%" font-family="sans-serif" font-size="10" fill="#52525b" text-anchor="middle" dominant-baseline="middle">No Image</text>
-</svg>
-`;
+</svg>`;
 
-const fallbackDataUrl = `data:image/svg+xml;base64,${typeof window === 'undefined' ? Buffer.from(fallbackSvg).toString('base64') : btoa(fallbackSvg)}`;
+// Đã xoá bỏ server/client branch typeof window để tránh lỗi hydration Next.js
+// Tham khảo: https://nextjs.org/docs/messages/react-hydration-error
+const fallbackDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(fallbackSvg)}`;
 
 interface ImageWithFallbackProps extends ImageProps {
   fallbackSrc?: string;

@@ -8,7 +8,7 @@ import { Movie } from '@/types';
 import { Loader2 } from 'lucide-react';
 
 interface LoadMoreProps {
-  type: 'category' | 'search';
+  type: 'category' | 'search' | 'genre';
   slugOrKeyword: string;
 }
 

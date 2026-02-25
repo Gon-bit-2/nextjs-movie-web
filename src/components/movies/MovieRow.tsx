@@ -4,13 +4,15 @@ import { useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Movie } from '@/types';
 import MovieCard from '@/components/common/MovieCard';
+import Link from 'next/link';
 
 interface MovieRowProps {
   title: string;
   movies: Movie[];
+  href?: string;
 }
 
-export default function MovieRow({ title, movies }: MovieRowProps) {
+export default function MovieRow({ title, movies, href }: MovieRowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
   const [isMoved, setIsMoved] = useState(false);
 
@@ -27,11 +29,22 @@ export default function MovieRow({ title, movies }: MovieRowProps) {
 
   return (
     <div className="group/row space-y-0.5 pt-4 md:space-y-2">
-      <h2 className="flex w-fit cursor-pointer items-center gap-2 px-4 text-sm font-bold text-[#e5e5e5] transition duration-200 hover:text-white md:px-[4%] md:text-xl lg:text-2xl">
-        {title}
-        <span className="mt-1 flex items-center text-[12px] font-semibold text-[#54b9c5] opacity-0 transition-opacity group-hover/row:opacity-100 md:text-[14px]">
-          Khám phá tất cả <ChevronRight className="ml-1 h-4 w-4" />
-        </span>
+      <h2 className="relative z-10 flex w-fit items-center px-4 md:px-[4%]">
+        {href ? (
+          <Link
+            href={href}
+            className="flex w-fit cursor-pointer items-center gap-2 text-sm font-bold text-[#e5e5e5] transition duration-200 hover:text-white md:text-xl lg:text-2xl"
+          >
+            {title}
+            <span className="mt-1 flex items-center text-[12px] font-semibold text-[#54b9c5] opacity-0 transition-opacity group-hover/row:opacity-100 md:text-[14px]">
+              Khám phá tất cả <ChevronRight className="ml-1 h-4 w-4" />
+            </span>
+          </Link>
+        ) : (
+          <span className="flex w-fit items-center gap-2 text-sm font-bold text-[#e5e5e5] md:text-xl lg:text-2xl">
+            {title}
+          </span>
+        )}
       </h2>
 
       <div className="group/slider relative">

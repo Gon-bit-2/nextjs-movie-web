@@ -27,10 +27,10 @@ export default async function Home() {
       {banerMovie && <HeroBanner movie={banerMovie} />}
 
       <div className="relative z-20 flex flex-col gap-4 md:-mt-24 md:gap-8 lg:-mt-32">
-        <MovieRow title="Mới & Phổ Biến" movies={popularMovies} />
-        <MovieRow title="Phim Bộ Cực Cuốn" movies={moviesBo} />
-        <MovieRow title="Phim Lẻ Đáng Xem" movies={moviesLe} />
-        <MovieRow title="Thế Giới Hoạt Hình" movies={hoatHinh} />
+        <MovieRow title="Mới & Phổ Biến" movies={popularMovies} href="/danh-sach/phim-moi" />
+        <MovieRow title="Phim Bộ Cực Cuốn" movies={moviesBo} href="/danh-sach/phim-bo" />
+        <MovieRow title="Phim Lẻ Đáng Xem" movies={moviesLe} href="/danh-sach/phim-le" />
+        <MovieRow title="Thế Giới Hoạt Hình" movies={hoatHinh} href="/danh-sach/hoat-hinh" />
       </div>
     </div>
   );

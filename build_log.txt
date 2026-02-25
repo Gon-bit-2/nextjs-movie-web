@@ -1,0 +1,21 @@
+▲ Next.js 16.1.6 (Turbopack)
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 5.6s
+  Running TypeScript ...
+Failed to compile.
+
+./src/components/movies/VideoPlayer.tsx:63:19
+Type error: Argument of type 'Level[]' is not assignable to parameter of type 'SetStateAction<{ [key: string]: unknown; height: number; }[]>'.
+  Type 'Level[]' is not assignable to type '{ [key: string]: unknown; height: number; }[]'.
+    Type 'Level' is not assignable to type '{ [key: string]: unknown; height: number; }'.
+      Index signature for type 'string' is missing in type 'Level'.
+
+[0m [90m 61 |[39m
+ [90m 62 |[39m         [90m// Cập nhật danh sách chất lượng video[39m
+[31m[1m>[22m[39m[90m 63 |[39m         setLevels(data[33m.[39mlevels)[33m;[39m
+ [90m    |[39m                   [31m[1m^[22m[39m
+ [90m 64 |[39m         setSelectedQuality(hls[33m.[39mcurrentLevel)[33m;[39m
+ [90m 65 |[39m
+ [90m 66 |[39m         [90m// Tự động khôi phục vị trí lưu nếu có[39m[0m
+Next.js build worker exited with code: 1 and signal: null

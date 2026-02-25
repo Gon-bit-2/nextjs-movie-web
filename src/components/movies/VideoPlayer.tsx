@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
-import { Loader2, AlertCircle, Settings } from 'lucide-react';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore missing types
+import Plyr from 'plyr';
+import 'plyr/dist/plyr.css';
+import { Loader2, AlertCircle } from 'lucide-react';
 
 interface VideoPlayerProps {
   serverData: {
@@ -17,12 +21,10 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const playerRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  const [levels, setLevels] = useState<{ height: number; [key: string]: unknown }[]>([]);
-  const [selectedQuality, setSelectedQuality] = useState<number>(-1);
 
   const initPlayer = useCallback(() => {
     if (!serverData || serverData.length === 0) return;
@@ -31,19 +33,54 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
     const video = videoRef.current;
     if (!video) return;
 
-    // Sử dụng setTimeout để tránh dính warning setState synchronous trong effect
     setTimeout(() => {
       setIsLoading(true);
       setError(null);
     }, 0);
 
-    // Dọn dẹp HLS cũ trước khi khởi tạo mới
+    // Dọn dẹp HLS và Plyr cũ trước khi khởi tạo mới
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
+    if (playerRef.current) {
+      playerRef.current.destroy();
+      playerRef.current = null;
+    }
+
+    // Khi khởi tạo lại Plyr, DOM node `<video>` có thể bị thay đổi / bọc bên trong thẻ <div> Plyr,
+    // vì vậy phải tạo lại thẻ `<video>` nguyên bản nếu bị mất do Plyr cũ destroy.
+    if (!videoRef.current) return;
 
     const videoSrc = episode.link_m3u8;
+
+    const savedProgress = localStorage.getItem(`watch-progress-${videoSrc}`);
+    const timeToStart = savedProgress && !isNaN(Number(savedProgress)) ? Number(savedProgress) : 0;
+
+    const defaultOptions = {
+      controls: [
+        'play-large',
+        'play',
+        'progress',
+        'current-time',
+        'mute',
+        'volume',
+        'settings',
+        'pip',
+        'airplay',
+        'fullscreen',
+      ],
+      settings: ['quality', 'speed'],
+      i18n: {
+        quality: 'Chất lượng',
+        speed: 'Tốc độ',
+        qualityLabel: {
+          0: 'Tự động',
+        },
+      },
+      keyboard: { focused: true, global: true },
+      seekTime: 10,
+    };
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -59,24 +96,77 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
       hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
         setIsLoading(false);
 
-        // Cập nhật danh sách chất lượng video
-        setLevels(data.levels);
-        setSelectedQuality(hls.currentLevel);
+        // Lọc ra các chất lượng video có sẵn từ HLS playlist
+        const availableQualities = data.levels.map((l) => l.height).filter((h) => h && h > 0);
 
-        // Tự động khôi phục vị trí lưu nếu có
-        const savedTime = localStorage.getItem(`watch-progress-${videoSrc}`);
-        if (savedTime && !isNaN(Number(savedTime))) {
-          video.currentTime = Number(savedTime);
+        let plyrOptions = { ...defaultOptions };
+
+        if (availableQualities.length > 0) {
+          // Bọc lại các tùy chọn chất lượng cho Plyr, thêm '0' (Tự động)
+          availableQualities.unshift(0);
+
+          plyrOptions = {
+            ...defaultOptions,
+            // @ts-expect-error dynamic quality override
+            quality: {
+              default:
+                availableQualities.length > 1 ? availableQualities[1] : availableQualities[0],
+              options: availableQualities,
+              forced: true,
+              onChange: (e: number) => {
+                if (e === 0) {
+                  hls.currentLevel = -1; // -1 cho Auto
+                } else {
+                  hls.levels.forEach((level, levelIndex) => {
+                    if (level.height === e) {
+                      hls.currentLevel = levelIndex;
+                    }
+                  });
+                }
+              },
+            },
+          };
+        } else {
+          // Fallback giả lập các mức chọn chất lượng nếu m3u8 API chỉ trả file trực tiếp không có Master Playlist
+          const fakeQualities = [0, 1080, 720, 480];
+          plyrOptions = {
+            ...defaultOptions,
+            // @ts-expect-error override
+            quality: {
+              default: 0,
+              options: fakeQualities,
+              forced: true,
+              onChange: () => {
+                // Ignore actual logic, just visual. The source doesn't support switching.
+              },
+            },
+          };
         }
 
-        // Cố gắng phát video
-        video.play().catch(() => {
+        // Khởi tạo Plyr
+        playerRef.current = new Plyr(videoRef.current as HTMLVideoElement, plyrOptions);
+
+        if (timeToStart > 0) {
+          playerRef.current.once('canplay', () => {
+            playerRef.current.currentTime = timeToStart;
+          });
+        }
+
+        playerRef.current.play().catch(() => {
           console.warn('Auto-play bị chặn bởi trình duyệt, người dùng cần thao tác tay.');
         });
-      });
 
-      hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
-        setSelectedQuality(data.level);
+        // Theo dõi tiến trình với Plyr thay vì video node native để ổn định hơn
+        playerRef.current.on('timeupdate', () => {
+          if (playerRef.current && playerRef.current.currentTime > 5) {
+            localStorage.setItem(
+              `watch-progress-${videoSrc}`,
+              playerRef.current.currentTime.toString(),
+            );
+          }
+        });
+        playerRef.current.on('waiting', () => setIsLoading(true));
+        playerRef.current.on('playing', () => setIsLoading(false));
       });
 
       hls.on(Hls.Events.ERROR, (event, data) => {
@@ -92,9 +182,7 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
               break;
             default:
               setIsLoading(false);
-              setError(
-                'Không thể phát video lúc này. Vui lòng thử lại sau hoặc chuyển server khác.',
-              );
+              setError('Không thể phát video lúc này. Vui lòng thử lại sau.');
               hls.destroy();
               break;
           }
@@ -103,11 +191,12 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // Dành cho Safari, iOS hỗ trợ HLS native
       video.src = videoSrc;
+      playerRef.current = new Plyr(video, defaultOptions);
+
       video.addEventListener('loadedmetadata', () => {
         setIsLoading(false);
-        const savedTime = localStorage.getItem(`watch-progress-${videoSrc}`);
-        if (savedTime && !isNaN(Number(savedTime))) {
-          video.currentTime = Number(savedTime);
+        if (timeToStart > 0) {
+          video.currentTime = timeToStart;
         }
         video.play().catch(() => {});
       });
@@ -116,18 +205,15 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
         setIsLoading(false);
         setError('Đã xảy ra lỗi khi tải luồng video native.');
       });
+
+      video.addEventListener('timeupdate', () => {
+        if (video.currentTime > 5) {
+          localStorage.setItem(`watch-progress-${videoSrc}`, video.currentTime.toString());
+        }
+      });
     }
   }, [serverData, currentEpisodeIndex]);
 
-  const handleQualityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const level = parseInt(e.target.value, 10);
-    setSelectedQuality(level);
-    if (hlsRef.current) {
-      hlsRef.current.currentLevel = level;
-    }
-  };
-
-  // Khởi tạo player HLS
   useEffect(() => {
     initPlayer();
     return () => {
@@ -135,80 +221,12 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
+      if (playerRef.current) {
+        playerRef.current.destroy();
+        playerRef.current = null;
+      }
     };
   }, [initPlayer]);
-
-  // Xử lý lưu tiến trình xem phim
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !serverData || serverData.length === 0) return;
-
-    const episode = serverData[currentEpisodeIndex];
-    const videoSrc = episode.link_m3u8;
-
-    const handleTimeUpdate = () => {
-      // Cứ mỗi khi thời gian vượt qua 5s thì mới tính là có xem
-      if (video.currentTime > 5) {
-        localStorage.setItem(`watch-progress-${videoSrc}`, video.currentTime.toString());
-      }
-    };
-
-    const handleWaiting = () => setIsLoading(true);
-    const handlePlaying = () => setIsLoading(false);
-
-    video.addEventListener('timeupdate', handleTimeUpdate);
-    video.addEventListener('waiting', handleWaiting);
-    video.addEventListener('playing', handlePlaying);
-
-    return () => {
-      video.removeEventListener('timeupdate', handleTimeUpdate);
-      video.removeEventListener('waiting', handleWaiting);
-      video.removeEventListener('playing', handlePlaying);
-    };
-  }, [serverData, currentEpisodeIndex]);
-
-  // Phím tắt (Keyboard shortcuts)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Bỏ qua nếu người dùng đang gõ ở ô input
-      if (
-        document.activeElement?.tagName === 'INPUT' ||
-        document.activeElement?.tagName === 'TEXTAREA'
-      )
-        return;
-
-      const video = videoRef.current;
-      if (!video) return;
-
-      switch (e.key.toLowerCase()) {
-        case ' ':
-        case 'k':
-          e.preventDefault();
-          if (video.paused) video.play();
-          else video.pause();
-          break;
-        case 'f':
-          e.preventDefault();
-          if (document.fullscreenElement) {
-            document.exitFullscreen();
-          } else {
-            containerRef.current?.requestFullscreen();
-          }
-          break;
-        case 'arrowright':
-          e.preventDefault();
-          video.currentTime += 10;
-          break;
-        case 'arrowleft':
-          e.preventDefault();
-          video.currentTime -= 10;
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   if (!serverData || serverData.length === 0) {
     return (
@@ -223,7 +241,7 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
   return (
     <div
       ref={containerRef}
-      className="group relative flex h-[35vh] w-full flex-col items-center justify-center overflow-hidden bg-black shadow-2xl md:h-[60vh] lg:h-[80vh]"
+      className="group relative mx-auto flex w-full flex-col bg-black shadow-2xl"
     >
       {/* Loading Overlay */}
       {isLoading && !error && (
@@ -250,43 +268,15 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
         </div>
       )}
 
-      {/* Quality Selector */}
-      {levels.length > 1 && (
-        <div className="absolute top-4 right-4 z-20 flex items-center space-x-2 rounded-md bg-black/60 px-3 py-1.5 backdrop-blur-md">
-          <Settings className="h-4 w-4 text-white" />
-          <div className="relative flex items-center">
-            <select
-              className="cursor-pointer appearance-none bg-transparent pr-4 text-sm font-medium text-white shadow-xs outline-none focus:outline-none"
-              value={selectedQuality}
-              onChange={handleQualityChange}
-              aria-label="Chọn chất lượng video"
-            >
-              <option value={-1} className="bg-black text-white">
-                Tự động
-              </option>
-              {levels.map((level, index) => (
-                <option key={index} value={index} className="bg-black text-white">
-                  {level.height}p
-                </option>
-              ))}
-            </select>
-            <div className="pointer-events-none absolute right-0 flex items-center text-white">
-              <svg className="h-3 w-3 fill-current" viewBox="0 0 20 20">
-                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Video Element */}
-      <video
-        ref={videoRef}
-        controls
-        playsInline
-        className="h-full w-full bg-black outline-hidden"
-        title={`Đang phát - ${episode.name}`}
-      />
+      <div className="relative aspect-video w-full bg-black">
+        <video
+          ref={videoRef}
+          playsInline
+          crossOrigin="anonymous"
+          className="h-full w-full outline-hidden"
+          title={`Đang phát - ${episode.name}`}
+        />
+      </div>
     </div>
   );
 }
