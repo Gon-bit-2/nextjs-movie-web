@@ -1,5 +1,6 @@
 import { getMovieDetail } from '@/lib/services/movie';
 import VideoPlayer from '@/components/movies/VideoPlayer';
+import EpisodeList from '@/components/movies/EpisodeList';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
@@ -56,26 +57,7 @@ export default async function WatchPage({ params, searchParams }: WatchPageProps
 
         {serverList.length > 1 && (
           <div className="mt-8">
-            <h2 className="mb-6 text-xl font-bold text-[#e5e5e5] md:text-2xl">Tập Phim</h2>
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
-              {serverList.map((ep, idx) => {
-                const isActive = idx === safeEpIndex;
-                return (
-                  <Link
-                    key={ep.slug}
-                    href={`/xem-phim/${slug}?tap=${idx + 1}`}
-                    scroll={false}
-                    className={`flex items-center justify-center rounded-md py-3 font-medium transition-all duration-300 md:py-4 ${
-                      isActive
-                        ? 'scale-105 bg-white text-black shadow-lg'
-                        : 'bg-[#333333] text-gray-300 hover:bg-[#4a4a4a] hover:text-white'
-                    }`}
-                  >
-                    {ep.name}
-                  </Link>
-                );
-              })}
-            </div>
+            <EpisodeList serverList={serverList} slug={slug} safeEpIndex={safeEpIndex} />
           </div>
         )}
 

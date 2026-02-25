@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, Settings } from 'lucide-react';
 
 interface VideoPlayerProps {
   serverData: {
@@ -20,6 +20,9 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
 
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const [levels, setLevels] = useState<{ height: number; [key: string]: unknown }[]>([]);
+  const [selectedQuality, setSelectedQuality] = useState<number>(-1);
 
   const initPlayer = useCallback(() => {
     if (!serverData || serverData.length === 0) return;
@@ -53,8 +56,13 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
       hls.loadSource(videoSrc);
       hls.attachMedia(video);
 
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
         setIsLoading(false);
+
+        // Cập nhật danh sách chất lượng video
+        setLevels(data.levels);
+        setSelectedQuality(hls.currentLevel);
+
         // Tự động khôi phục vị trí lưu nếu có
         const savedTime = localStorage.getItem(`watch-progress-${videoSrc}`);
         if (savedTime && !isNaN(Number(savedTime))) {
@@ -65,6 +73,10 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
         video.play().catch(() => {
           console.warn('Auto-play bị chặn bởi trình duyệt, người dùng cần thao tác tay.');
         });
+      });
+
+      hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+        setSelectedQuality(data.level);
       });
 
       hls.on(Hls.Events.ERROR, (event, data) => {
@@ -106,6 +118,14 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
       });
     }
   }, [serverData, currentEpisodeIndex]);
+
+  const handleQualityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const level = parseInt(e.target.value, 10);
+    setSelectedQuality(level);
+    if (hlsRef.current) {
+      hlsRef.current.currentLevel = level;
+    }
+  };
 
   // Khởi tạo player HLS
   useEffect(() => {
@@ -227,6 +247,35 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
           >
             Thử tải lại
           </button>
+        </div>
+      )}
+
+      {/* Quality Selector */}
+      {levels.length > 1 && (
+        <div className="absolute top-4 right-4 z-20 flex items-center space-x-2 rounded-md bg-black/60 px-3 py-1.5 backdrop-blur-md">
+          <Settings className="h-4 w-4 text-white" />
+          <div className="relative flex items-center">
+            <select
+              className="cursor-pointer appearance-none bg-transparent pr-4 text-sm font-medium text-white shadow-xs outline-none focus:outline-none"
+              value={selectedQuality}
+              onChange={handleQualityChange}
+              aria-label="Chọn chất lượng video"
+            >
+              <option value={-1} className="bg-black text-white">
+                Tự động
+              </option>
+              {levels.map((level, index) => (
+                <option key={index} value={index} className="bg-black text-white">
+                  {level.height}p
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute right-0 flex items-center text-white">
+              <svg className="h-3 w-3 fill-current" viewBox="0 0 20 20">
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+              </svg>
+            </div>
+          </div>
         </div>
       )}
 
