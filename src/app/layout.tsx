@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Netflix Clone - Nền tảng Xem Phim',
-  description: 'Trang web xem phim miễn phí xây dựng bằng Next.js, API kkphim',
+  title: 'PhimHay - Xem phim online',
+  description: 'Nền tảng xem phim online với tìm kiếm nhanh, tiếp tục xem và danh sách cá nhân.',
 };
 
 export default function RootLayout({

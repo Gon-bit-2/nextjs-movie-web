@@ -3,9 +3,27 @@ import ImageWithFallback from '@/components/common/ImageWithFallback';
 import Link from 'next/link';
 import { Play } from 'lucide-react';
 import type { Metadata } from 'next';
+import MovieActionButtons from '@/components/movies/MovieActionButtons';
+import EpisodeList from '@/components/movies/EpisodeList';
 
 interface MovieDetailProps {
   params: Promise<{ slug: string }>;
+}
+
+function getYoutubeEmbedUrl(url: string | undefined): string | null {
+  if (!url) return null;
+
+  try {
+    const parsedUrl = new URL(url);
+    const videoId =
+      parsedUrl.hostname.includes('youtu.be') || parsedUrl.pathname.startsWith('/shorts/')
+        ? parsedUrl.pathname.split('/').filter(Boolean).at(-1)
+        : parsedUrl.searchParams.get('v');
+
+    return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function generateMetadata({ params }: MovieDetailProps): Promise<Metadata> {
@@ -14,7 +32,7 @@ export async function generateMetadata({ params }: MovieDetailProps): Promise<Me
   if (!data?.movie) return { title: 'Không tìm thấy phim' };
 
   return {
-    title: `${data.movie.name} - Netflix Clone`,
+    title: `${data.movie.name} - PhimHay`,
     description: data.movie.content.replace(/<[^>]+>/g, '').substring(0, 150),
   };
 }
@@ -37,6 +55,8 @@ export default async function MovieDetailPage({ params }: MovieDetailProps) {
   const { movie } = data;
   const imageUrl = getImageUrl(movie.thumb_url || movie.poster_url);
   const cleanContent = movie.content ? movie.content.replace(/<[^>]+>/g, '') : 'Không có tóm tắt';
+  const serverList = data.episodes[0]?.server_data || [];
+  const trailerUrl = getYoutubeEmbedUrl(movie.trailer_url);
 
   return (
     <div className="relative min-h-screen">
@@ -73,24 +93,32 @@ export default async function MovieDetailPage({ params }: MovieDetailProps) {
           </h2>
 
           <div className="mb-8 flex flex-wrap items-center gap-4 text-sm font-semibold">
-            <span className="text-green-500">Độ phân giải: {movie.quality}</span>
+            <span className="rounded-full bg-green-500/15 px-3 py-1 text-green-400">
+              {movie.quality || 'HD'}
+            </span>
             <span className="rounded bg-gray-800 px-2 py-1 text-white">{movie.time || 'N/A'}</span>
             <span className="rounded border border-gray-600 px-2 py-1 text-gray-300">
               {movie.episode_current}
             </span>
+            <span className="rounded border border-gray-600 px-2 py-1 text-gray-300">
+              {movie.lang || 'Vietsub'}
+            </span>
           </div>
 
-          <p className="mb-8 line-clamp-4 max-w-3xl leading-relaxed text-gray-200 md:text-lg">
+          <p className="mb-8 max-w-3xl leading-relaxed text-gray-200 md:text-lg">
             {cleanContent}
           </p>
 
-          <Link
-            href={`/xem-phim/${movie.slug}`}
-            className="inline-flex items-center justify-center gap-2 rounded bg-white px-8 py-3 font-bold text-black transition-opacity hover:bg-white/80"
-          >
-            <Play className="h-6 w-6 fill-black" />
-            <span>Xem Phim</span>
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href={`/xem-phim/${movie.slug}`}
+              className="inline-flex items-center justify-center gap-2 rounded bg-white px-8 py-3 font-bold text-black transition-opacity hover:bg-white/80"
+            >
+              <Play className="h-6 w-6 fill-black" />
+              <span>Xem phim</span>
+            </Link>
+            <MovieActionButtons movie={movie} />
+          </div>
 
           {/* Casting info */}
           <div className="mt-12 grid gap-2 text-sm text-gray-400">
@@ -112,6 +140,29 @@ export default async function MovieDetailPage({ params }: MovieDetailProps) {
             </p>
           </div>
         </div>
+      </div>
+
+      <div className="mx-auto max-w-7xl px-4 pt-12 md:px-12">
+        {serverList.length > 1 && (
+          <section className="rounded-lg border border-white/10 bg-white/[0.03] p-4 md:p-6">
+            <EpisodeList serverList={serverList} slug={slug} safeEpIndex={0} />
+          </section>
+        )}
+
+        {trailerUrl && (
+          <section className="mt-10">
+            <h2 className="mb-4 text-2xl font-bold text-white">Trailer</h2>
+            <div className="aspect-video overflow-hidden rounded-lg border border-white/10 bg-black">
+              <iframe
+                src={trailerUrl}
+                title={`Trailer ${movie.name}`}
+                className="h-full w-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

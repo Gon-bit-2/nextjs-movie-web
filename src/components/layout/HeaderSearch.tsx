@@ -8,6 +8,7 @@ import { searchMoviesAction } from '@/app/actions/movie';
 import { Movie } from '@/types';
 import { getImageUrl } from '@/lib/services/movie';
 import Image from 'next/image';
+import { usePersonalization } from '@/hooks/usePersonalization';
 
 export default function HeaderSearch() {
   const [isOpen, setIsOpen] = useState(false);
@@ -16,6 +17,8 @@ export default function HeaderSearch() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const requestIdRef = useRef(0);
+  const { recentSearches, rememberSearch } = usePersonalization();
 
   // Handle outside click to close
   useEffect(() => {
@@ -33,26 +36,37 @@ export default function HeaderSearch() {
 
   // Debounced search
   useEffect(() => {
+    const cleanKeyword = keyword.trim();
     const handler = setTimeout(async () => {
-      if (keyword.trim().length > 0) {
+      if (cleanKeyword.length >= 2) {
+        const requestId = requestIdRef.current + 1;
+        requestIdRef.current = requestId;
         setIsLoading(true);
-        const data = await searchMoviesAction(keyword, 5);
+        const data = await searchMoviesAction(cleanKeyword, 5);
+        if (requestId !== requestIdRef.current) return;
         setResults(data);
         setIsLoading(false);
       } else {
         setResults([]);
+        setIsLoading(false);
       }
     }, 500);
 
     return () => clearTimeout(handler);
   }, [keyword]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (keyword.trim()) {
-      router.push(`/tim-kiem?keyword=${encodeURIComponent(keyword.trim())}`);
+  const executeSearch = (value: string) => {
+    const cleanKeyword = value.trim();
+    if (cleanKeyword) {
+      rememberSearch(cleanKeyword);
+      router.push(`/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}`);
       setIsOpen(false);
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    executeSearch(keyword);
   };
 
   const clearSearch = () => {
@@ -110,9 +124,26 @@ export default function HeaderSearch() {
       </div>
 
       {/* Auto-suggest Dropdown */}
-      {isOpen && keyword.trim().length > 0 && (
+      {isOpen && (keyword.trim().length > 0 || recentSearches.length > 0) && (
         <div className="bg-background absolute top-12 right-0 w-full min-w-[300px] overflow-hidden rounded-md border border-gray-700 shadow-2xl sm:min-w-[400px]">
-          {isLoading ? (
+          {keyword.trim().length === 0 && recentSearches.length > 0 ? (
+            <div className="flex flex-col">
+              <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">
+                Tìm kiếm gần đây
+              </div>
+              {recentSearches.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => executeSearch(item)}
+                  className="flex items-center gap-3 border-b border-gray-800 p-3 text-left text-sm text-gray-200 transition-colors hover:bg-gray-800"
+                >
+                  <Search className="h-4 w-4 text-gray-500" />
+                  {item}
+                </button>
+              ))}
+            </div>
+          ) : isLoading ? (
             <div className="flex items-center justify-center p-6 text-gray-400">
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               <span className="text-sm">Đang tìm kiếm...</span>
@@ -149,7 +180,7 @@ export default function HeaderSearch() {
               </div>
               <button
                 type="button"
-                onClick={handleSubmit}
+                onClick={() => executeSearch(keyword)}
                 className="hover:text-netflix w-full bg-gray-900 p-3 text-center text-sm font-medium text-white transition-colors hover:bg-gray-800"
               >
                 Xem tất cả kết quả cho &quot;{keyword}&quot;

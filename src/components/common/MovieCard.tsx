@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import ImageWithFallback from '@/components/common/ImageWithFallback';
-import { Play, Plus, ThumbsUp, ChevronDown } from 'lucide-react';
+import { Play, ChevronDown } from 'lucide-react';
 import { Movie } from '@/types';
 import { getImageUrl } from '@/lib/services/movie';
+import MovieActionButtons from '@/components/movies/MovieActionButtons';
 
 interface MovieCardProps {
   movie: Movie;
@@ -15,7 +16,7 @@ export default function MovieCard({ movie, type = 'backdrop', priority = false }
 
   return (
     <div
-      className={`group relative w-full ${type === 'backdrop' ? 'aspect-video' : 'aspect-2/3'} z-0 rounded-md bg-zinc-900 transition-all duration-300 focus-within:z-50 hover:z-50 hover:shadow-[0_0_20px_rgba(0,0,0,0.8)] md:hover:-translate-y-8 md:hover:scale-[1.25]`}
+      className={`group relative z-0 w-full ${type === 'backdrop' ? 'aspect-video' : 'aspect-2/3'} rounded-lg bg-zinc-900 transition-all duration-300 focus-within:z-50 hover:z-50 hover:shadow-[0_10px_28px_rgba(0,0,0,0.55)] md:hover:-translate-y-2 md:hover:scale-[1.04]`}
     >
       <Link
         href={`/phim/${movie.slug}`}
@@ -32,7 +33,7 @@ export default function MovieCard({ movie, type = 'backdrop', priority = false }
       </Link>
 
       {/* Cửa sổ bật lên khi Hover (mô phỏng Modal thu nhỏ của Netflix) */}
-      <div className="invisible absolute top-full left-0 z-10 w-full rounded-b-md bg-[#181818] p-4 opacity-0 shadow-[0_10px_20px_rgba(0,0,0,0.8)] transition-all duration-300 group-hover:visible group-hover:opacity-100">
+      <div className="invisible absolute top-full left-0 z-10 hidden w-full rounded-b-lg bg-[#181818] p-4 opacity-0 shadow-[0_10px_20px_rgba(0,0,0,0.8)] transition-all duration-300 group-hover:visible group-hover:opacity-100 md:block">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Link
@@ -41,12 +42,7 @@ export default function MovieCard({ movie, type = 'backdrop', priority = false }
             >
               <Play className="ml-1 h-4 w-4 fill-black text-black md:h-5 md:w-5" />
             </Link>
-            <button className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-gray-400 text-gray-400 transition-colors hover:border-white hover:text-white md:h-10 md:w-10">
-              <Plus className="h-4 w-4 md:h-5 md:w-5" />
-            </button>
-            <button className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-gray-400 text-gray-400 transition-colors hover:border-white hover:text-white md:h-10 md:w-10">
-              <ThumbsUp className="h-4 w-4 md:h-5 md:w-5" />
-            </button>
+            <MovieActionButtons movie={movie} />
           </div>
           <Link
             href={`/phim/${movie.slug}`}

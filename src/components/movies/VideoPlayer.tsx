@@ -1,12 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import Hls from 'hls.js';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore missing types
-import Plyr from 'plyr';
 import 'plyr/dist/plyr.css';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, RotateCcw } from 'lucide-react';
+import { clearEpisodeProgress, saveWatchProgress } from '@/lib/storage/movie-personalization';
 
 interface VideoPlayerProps {
   serverData: {
@@ -15,18 +12,68 @@ interface VideoPlayerProps {
     name: string;
   }[];
   currentEpisodeIndex: number;
+  movieSlug: string;
+  movieName: string;
+  thumbUrl?: string;
+  posterUrl?: string;
 }
 
-export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPlayerProps) {
+interface HlsLevel {
+  height: number;
+}
+
+interface HlsErrorData {
+  fatal: boolean;
+  type: string;
+}
+
+interface HlsInstance {
+  levels: HlsLevel[];
+  currentLevel: number;
+  loadSource: (source: string) => void;
+  attachMedia: (media: HTMLMediaElement) => void;
+  on: (event: string, handler: (event: string, data: unknown) => void) => void;
+  startLoad: () => void;
+  recoverMediaError: () => void;
+  destroy: () => void;
+}
+
+interface HlsStatic {
+  isSupported: () => boolean;
+  Events: { MANIFEST_PARSED: string; ERROR: string };
+  ErrorTypes: { NETWORK_ERROR: string; MEDIA_ERROR: string };
+  new (config: { enableWorker: boolean; lowLatencyMode: boolean; backBufferLength: number }): HlsInstance;
+}
+
+interface PlayerInstance {
+  currentTime: number;
+  duration: number;
+  play: () => Promise<void>;
+  destroy: () => void;
+  once: (event: string, handler: () => void) => void;
+  on: (event: string, handler: () => void) => void;
+}
+
+type PlyrOptions = Record<string, unknown>;
+type PlyrStatic = new (target: HTMLVideoElement, options: PlyrOptions) => PlayerInstance;
+
+export default function VideoPlayer({
+  serverData,
+  currentEpisodeIndex,
+  movieSlug,
+  movieName,
+  thumbUrl,
+  posterUrl,
+}: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const hlsRef = useRef<Hls | null>(null);
-  const playerRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const hlsRef = useRef<HlsInstance | null>(null);
+  const playerRef = useRef<PlayerInstance | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const initPlayer = useCallback(() => {
+  const initPlayer = useCallback(async () => {
     if (!serverData || serverData.length === 0) return;
 
     const episode = serverData[currentEpisodeIndex];
@@ -54,10 +101,12 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
 
     const videoSrc = episode.link_m3u8;
 
-    const savedProgress = localStorage.getItem(`watch-progress-${videoSrc}`);
+    const savedProgress = localStorage.getItem(
+      `watch-progress-${movieSlug}-${currentEpisodeIndex}`,
+    );
     const timeToStart = savedProgress && !isNaN(Number(savedProgress)) ? Number(savedProgress) : 0;
 
-    const defaultOptions = {
+    const defaultOptions: PlyrOptions = {
       controls: [
         'play-large',
         'play',
@@ -82,6 +131,13 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
       seekTime: 10,
     };
 
+    const [{ default: HlsDefault }, { default: PlyrDefault }] = await Promise.all([
+      import('hls.js'),
+      import('plyr'),
+    ]);
+    const Hls = HlsDefault as HlsStatic;
+    const Plyr = PlyrDefault as PlyrStatic;
+
     if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
@@ -93,11 +149,14 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
       hls.loadSource(videoSrc);
       hls.attachMedia(video);
 
-      hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+      hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
         setIsLoading(false);
 
         // Lọc ra các chất lượng video có sẵn từ HLS playlist
-        const availableQualities = data.levels.map((l) => l.height).filter((h) => h && h > 0);
+        const manifest = data as { levels: HlsLevel[] };
+        const availableQualities = manifest.levels
+          .map((level) => level.height)
+          .filter((height) => height && height > 0);
 
         let plyrOptions = { ...defaultOptions };
 
@@ -107,18 +166,17 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
 
           plyrOptions = {
             ...defaultOptions,
-            // @ts-expect-error dynamic quality override
             quality: {
               default:
                 availableQualities.length > 1 ? availableQualities[1] : availableQualities[0],
               options: availableQualities,
               forced: true,
-              onChange: (e: number) => {
-                if (e === 0) {
+              onChange: (quality: number) => {
+                if (quality === 0) {
                   hls.currentLevel = -1; // -1 cho Auto
                 } else {
                   hls.levels.forEach((level, levelIndex) => {
-                    if (level.height === e) {
+                    if (level.height === quality) {
                       hls.currentLevel = levelIndex;
                     }
                   });
@@ -131,7 +189,6 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
           const fakeQualities = [0, 1080, 720, 480];
           plyrOptions = {
             ...defaultOptions,
-            // @ts-expect-error override
             quality: {
               default: 0,
               options: fakeQualities,
@@ -144,34 +201,53 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
         }
 
         // Khởi tạo Plyr
-        playerRef.current = new Plyr(videoRef.current as HTMLVideoElement, plyrOptions);
+        const player = new Plyr(videoRef.current as HTMLVideoElement, plyrOptions);
+        playerRef.current = player;
 
         if (timeToStart > 0) {
-          playerRef.current.once('canplay', () => {
-            playerRef.current.currentTime = timeToStart;
+          player.once('canplay', () => {
+            if (playerRef.current !== player) {
+              return;
+            }
+
+            player.currentTime = timeToStart;
           });
         }
 
-        playerRef.current.play().catch(() => {
+        player.play().catch(() => {
           console.warn('Auto-play bị chặn bởi trình duyệt, người dùng cần thao tác tay.');
         });
 
         // Theo dõi tiến trình với Plyr thay vì video node native để ổn định hơn
-        playerRef.current.on('timeupdate', () => {
-          if (playerRef.current && playerRef.current.currentTime > 5) {
-            localStorage.setItem(
-              `watch-progress-${videoSrc}`,
-              playerRef.current.currentTime.toString(),
-            );
+        player.on('timeupdate', () => {
+          if (playerRef.current !== player || player.currentTime <= 5) {
+            return;
           }
+
+          localStorage.setItem(
+            `watch-progress-${movieSlug}-${currentEpisodeIndex}`,
+            player.currentTime.toString(),
+          );
+          saveWatchProgress({
+            slug: movieSlug,
+            name: movieName,
+            thumb_url: thumbUrl,
+            poster_url: posterUrl,
+            episodeName: episode.name,
+            episodeIndex: currentEpisodeIndex,
+            currentTime: player.currentTime,
+            duration: player.duration,
+            updatedAt: Date.now(),
+          });
         });
-        playerRef.current.on('waiting', () => setIsLoading(true));
-        playerRef.current.on('playing', () => setIsLoading(false));
+        player.on('waiting', () => setIsLoading(true));
+        player.on('playing', () => setIsLoading(false));
       });
 
-      hls.on(Hls.Events.ERROR, (event, data) => {
-        if (data.fatal) {
-          switch (data.type) {
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        const errorData = data as HlsErrorData;
+        if (errorData.fatal) {
+          switch (errorData.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               setError('Lỗi kết nối mạng, đang thử lại...');
               hls.startLoad();
@@ -208,11 +284,25 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
 
       video.addEventListener('timeupdate', () => {
         if (video.currentTime > 5) {
-          localStorage.setItem(`watch-progress-${videoSrc}`, video.currentTime.toString());
+          localStorage.setItem(
+            `watch-progress-${movieSlug}-${currentEpisodeIndex}`,
+            video.currentTime.toString(),
+          );
+          saveWatchProgress({
+            slug: movieSlug,
+            name: movieName,
+            thumb_url: thumbUrl,
+            poster_url: posterUrl,
+            episodeName: episode.name,
+            episodeIndex: currentEpisodeIndex,
+            currentTime: video.currentTime,
+            duration: video.duration,
+            updatedAt: Date.now(),
+          });
         }
       });
     }
-  }, [serverData, currentEpisodeIndex]);
+  }, [serverData, currentEpisodeIndex, movieSlug, movieName, thumbUrl, posterUrl]);
 
   useEffect(() => {
     initPlayer();
@@ -227,6 +317,18 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
       }
     };
   }, [initPlayer]);
+
+  const handleRestart = () => {
+    clearEpisodeProgress(movieSlug, currentEpisodeIndex);
+    localStorage.removeItem(`watch-progress-${movieSlug}-${currentEpisodeIndex}`);
+    if (playerRef.current) {
+      playerRef.current.currentTime = 0;
+      void playerRef.current.play();
+    } else if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+      void videoRef.current.play();
+    }
+  };
 
   if (!serverData || serverData.length === 0) {
     return (
@@ -267,6 +369,15 @@ export default function VideoPlayer({ serverData, currentEpisodeIndex }: VideoPl
           </button>
         </div>
       )}
+
+      <button
+        type="button"
+        onClick={handleRestart}
+        className="absolute top-3 right-3 z-20 flex items-center gap-2 rounded-full bg-black/65 px-3 py-2 text-xs font-semibold text-white opacity-80 backdrop-blur transition-opacity hover:opacity-100"
+      >
+        <RotateCcw className="h-4 w-4" />
+        Bắt đầu lại
+      </button>
 
       <div className="relative aspect-video w-full bg-black">
         <video

@@ -6,6 +6,9 @@ export interface Movie {
   thumb_url: string;
   poster_url: string;
   year: number;
+  quality?: string;
+  episode_current?: string;
+  time?: string;
 }
 
 export interface Pagination {
@@ -56,4 +59,47 @@ export interface ApiDetailResponse {
   msg: string;
   movie: MovieDetail;
   episodes: Episode[];
+  servers?: Episode[];
+}
+
+export interface MovieProgress {
+  slug: string;
+  name: string;
+  origin_name?: string;
+  thumb_url?: string;
+  poster_url?: string;
+  episodeName?: string;
+  episodeIndex: number;
+  currentTime: number;
+  duration?: number;
+  updatedAt: number;
+}
+
+export interface SavedMovie {
+  _id: string;
+  name: string;
+  slug: string;
+  origin_name?: string;
+  thumb_url?: string;
+  poster_url?: string;
+  year?: number;
+  quality?: string;
+  addedAt: number;
+}
+
+export interface MovieInteraction {
+  slug: string;
+  liked: boolean;
+  updatedAt: number;
+}
+
+export interface GenreConfig {
+  slug: string;
+  label: string;
+}
+
+export interface CategoryConfig {
+  slug: string;
+  label: string;
+  href: string;
 }

@@ -24,17 +24,17 @@ export default function ImageWithFallback({
 }: ImageWithFallbackProps) {
   const [errorInfo, setErrorInfo] = useState({ error: false, failedSrc: '' });
 
+  const imageSrc = src || fallbackSrc;
   const hasError = errorInfo.error && errorInfo.failedSrc === src;
 
   return (
     <Image
       {...rest}
-      src={hasError ? fallbackSrc : src}
+      src={hasError ? fallbackSrc : imageSrc}
       alt={alt}
       onError={() => {
         setErrorInfo({ error: true, failedSrc: src as string });
       }}
-      unoptimized
     />
   );
 }

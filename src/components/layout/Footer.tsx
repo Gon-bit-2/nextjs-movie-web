@@ -43,7 +43,7 @@ export default function Footer() {
             Liên hệ với chúng tôi
           </Link>
         </div>
-        <p className="mt-8 text-xs">Netflix Clone By PhimAPI</p>
+        <p className="mt-8 text-xs">PhimHay sử dụng dữ liệu từ PhimAPI.</p>
       </div>
     </footer>
   );

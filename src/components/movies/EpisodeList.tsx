@@ -15,9 +15,10 @@ interface EpisodeListProps {
   serverList: Episode[];
   slug: string;
   safeEpIndex: number;
+  serverIndex?: number;
 }
 
-export default function EpisodeList({ serverList, slug, safeEpIndex }: EpisodeListProps) {
+export default function EpisodeList({ serverList, slug, safeEpIndex, serverIndex }: EpisodeListProps) {
   const EPISODES_PER_CHUNK = 50;
 
   // Tính toán số phần
@@ -86,7 +87,9 @@ export default function EpisodeList({ serverList, slug, safeEpIndex }: EpisodeLi
           return (
             <Link
               key={ep.slug}
-              href={`/xem-phim/${slug}?tap=${actualIndex + 1}`}
+              href={`/xem-phim/${slug}?tap=${actualIndex + 1}${
+                serverIndex ? `&server=${serverIndex}` : ''
+              }`}
               onClick={handleEpisodeClick}
               scroll={false}
               className={`flex items-center justify-center rounded-md py-3 font-medium transition-all duration-300 md:py-4 ${

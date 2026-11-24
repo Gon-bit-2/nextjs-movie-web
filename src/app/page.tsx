@@ -1,5 +1,7 @@
 import HeroBanner from '@/components/movies/HeroBanner';
 import MovieRow from '@/components/movies/MovieRow';
+import PersonalizedRows from '@/components/movies/PersonalizedRows';
+import GenreRail from '@/components/movies/GenreRail';
 import { getNewMovies, getMoviesByCategory } from '@/lib/services/movie';
 
 // Revalidate mỗi 1 giờ
@@ -17,6 +19,7 @@ export default async function Home() {
   const newMovies = newMoviesRes?.items || [];
   const banerMovie = newMovies.length > 0 ? newMovies[0] : null;
   const popularMovies = newMovies.slice(1, 20);
+  const topMovies = newMovies.slice(0, 10);
 
   const moviesBo = moviesBoRes?.items || [];
   const moviesLe = moviesLeRes?.items || [];
@@ -27,10 +30,13 @@ export default async function Home() {
       {banerMovie && <HeroBanner movie={banerMovie} />}
 
       <div className="relative z-20 flex flex-col gap-4 md:-mt-24 md:gap-8 lg:-mt-32">
-        <MovieRow title="Mới & Phổ Biến" movies={popularMovies} href="/danh-sach/phim-moi" />
-        <MovieRow title="Phim Bộ Cực Cuốn" movies={moviesBo} href="/danh-sach/phim-bo" />
-        <MovieRow title="Phim Lẻ Đáng Xem" movies={moviesLe} href="/danh-sach/phim-le" />
-        <MovieRow title="Thế Giới Hoạt Hình" movies={hoatHinh} href="/danh-sach/hoat-hinh" />
+        <PersonalizedRows />
+        <MovieRow title="Top phim đang nổi" movies={topMovies} href="/danh-sach/phim-moi" />
+        <MovieRow title="Mới cập nhật" movies={popularMovies} href="/danh-sach/phim-moi" />
+        <MovieRow title="Phim bộ" movies={moviesBo} href="/danh-sach/phim-bo" />
+        <MovieRow title="Phim lẻ" movies={moviesLe} href="/danh-sach/phim-le" />
+        <MovieRow title="Hoạt hình" movies={hoatHinh} href="/danh-sach/hoat-hinh" />
+        <GenreRail />
       </div>
     </div>
   );
