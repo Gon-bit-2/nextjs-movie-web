@@ -1,49 +1,55 @@
-import MovieCard from '@/components/common/MovieCard';
-import { getMoviesByCategory } from '@/lib/services/movie';
-import LoadMore from '@/components/common/LoadMore';
-import DiscoverySidebar from '@/components/movies/DiscoverySidebar';
-import SortLinks from '@/components/movies/SortLinks';
+import type { Metadata } from 'next';
+import {
+  getCountries,
+  getGenres,
+  getMoviesByCategory,
+  getYears,
+} from '@/lib/services/movie';
+import { parseListFilters } from '@/lib/services/filters';
 import { getCategoryLabel } from '@/config/navigation';
-import { getMovieSortKey, sortMovies } from '@/lib/movies/sort';
+import MovieListingView from '@/components/movies/MovieListingView';
 
-// Revalidate mỗi giờ đối với danh sách tĩnh
-export const revalidate = 3600;
+export const revalidate = 1800;
 
 interface CategoryPageProps {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
+/**
+ * Tạo tiêu đề SEO cho trang danh mục phim
+ */
+export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  return { title: getCategoryLabel(slug) };
+}
+
+/**
+ * Trang danh sách theo danh mục (/danh-sach/[slug]) hỗ trợ đầy đủ bộ lọc phía server v1
+ */
 export default async function CategoryPage({ params, searchParams }: CategoryPageProps) {
   const { slug } = await params;
-  const { sort } = await searchParams;
-  const title = getCategoryLabel(slug);
-  const activeSort = getMovieSortKey(sort);
+  const rawSearchParams = await searchParams;
+  const filters = parseListFilters(rawSearchParams);
 
-  const data = await getMoviesByCategory(slug, 1);
-  const movies = sortMovies(data?.items || [], activeSort);
+  const [data, genres, countries, years] = await Promise.all([
+    getMoviesByCategory(slug, 1, filters),
+    getGenres(),
+    getCountries(),
+    getYears(),
+  ]);
 
   return (
-    <div className="flex min-h-[80vh] flex-col gap-8 px-4 pt-24 md:flex-row md:px-12">
-      <DiscoverySidebar activeCategory={slug} />
-
-      <div className="flex-1">
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl font-bold text-white md:text-3xl">{title}</h1>
-          <SortLinks basePath={`/danh-sach/${slug}`} activeSort={activeSort} />
-        </div>
-
-        {movies.length === 0 ? (
-          <p className="text-gray-400">Đang cập nhật hoặc không tìm thấy danh mục này.</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 md:gap-4 lg:grid-cols-5 lg:gap-6 xl:grid-cols-6">
-            {movies.map((movie) => (
-              <MovieCard key={movie._id} movie={movie} />
-            ))}
-            <LoadMore type="category" slugOrKeyword={slug} />
-          </div>
-        )}
-      </div>
-    </div>
+    <MovieListingView
+      title={getCategoryLabel(slug)}
+      basePath={`/danh-sach/${slug}`}
+      loadMoreType="category"
+      slugOrKeyword={slug}
+      data={data}
+      filters={filters}
+      genres={genres}
+      countries={countries}
+      years={years}
+    />
   );
 }

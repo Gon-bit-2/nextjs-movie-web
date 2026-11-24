@@ -8,6 +8,16 @@ const nextConfig: NextConfig = {
         hostname: 'phimimg.com',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'phimapi.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'image.tmdb.org',
+        pathname: '/**',
+      },
     ],
   },
 };

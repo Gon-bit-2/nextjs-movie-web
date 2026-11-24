@@ -1,198 +1,277 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Search, X, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Clock, Loader2, Search, Star, Trash2, X } from 'lucide-react';
 import { searchMoviesAction } from '@/app/actions/movie';
-import { Movie } from '@/types';
-import { getImageUrl } from '@/lib/services/movie';
-import Image from 'next/image';
+import { getImageUrl, getMovieScore } from '@/lib/services/movie';
 import { usePersonalization } from '@/hooks/usePersonalization';
+import ImageWithFallback from '@/components/common/ImageWithFallback';
+import type { Movie } from '@/types';
 
+/**
+ * Hộp thoại tìm kiếm nhanh kiểu Command Palette (mở bằng Ctrl+K, Cmd+K hoặc phím /)
+ */
 export default function HeaderSearch() {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [results, setResults] = useState<Movie[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
-  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const requestIdRef = useRef(0);
-  const { recentSearches, rememberSearch } = usePersonalization();
+  const { recentSearches, rememberSearch, clearSearches } = usePersonalization();
 
-  // Handle outside click to close
+  // Đăng ký phím tắt Ctrl+K / Cmd+K / phím / và Esc
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        searchContainerRef.current &&
-        !searchContainerRef.current.contains(event.target as Node)
-      ) {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isTyping =
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable);
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setIsOpen((prev) => !prev);
+      } else if (!isTyping && event.key === '/') {
+        event.preventDefault();
+        setIsOpen(true);
+      } else if (event.key === 'Escape' && isOpen) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
-  // Debounced search
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
+  // Tự động focus vào ô nhập khi mở modal tìm kiếm
   useEffect(() => {
-    const cleanKeyword = keyword.trim();
-    const handler = setTimeout(async () => {
-      if (cleanKeyword.length >= 2) {
-        const requestId = requestIdRef.current + 1;
-        requestIdRef.current = requestId;
-        setIsLoading(true);
-        const data = await searchMoviesAction(cleanKeyword, 5);
-        if (requestId !== requestIdRef.current) return;
-        setResults(data);
-        setIsLoading(false);
-      } else {
-        setResults([]);
-        setIsLoading(false);
-      }
-    }, 500);
+    if (isOpen) {
+      window.setTimeout(() => inputRef.current?.focus(), 40);
+    }
+  }, [isOpen]);
 
-    return () => clearTimeout(handler);
+  // Tìm kiếm gợi ý có debounce 300ms
+  useEffect(() => {
+    const clean = keyword.trim();
+    if (clean.length < 2) {
+      return;
+    }
+
+    const timer = window.setTimeout(async () => {
+      const reqId = requestIdRef.current + 1;
+      requestIdRef.current = reqId;
+      setIsLoading(true);
+
+      const items = await searchMoviesAction(clean, 8);
+      if (reqId !== requestIdRef.current) return;
+
+      setResults(items);
+      setIsLoading(false);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
   }, [keyword]);
 
+  const cleanKeyword = keyword.trim();
+  const visibleResults = cleanKeyword.length >= 2 ? results : [];
+  const showLoading = cleanKeyword.length >= 2 && isLoading;
+
+  /**
+   * Điều hướng tới trang kết quả tìm kiếm đầy đủ và lưu lịch sử
+   */
   const executeSearch = (value: string) => {
-    const cleanKeyword = value.trim();
-    if (cleanKeyword) {
-      rememberSearch(cleanKeyword);
-      router.push(`/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}`);
-      setIsOpen(false);
-    }
+    const clean = value.trim();
+    if (!clean) return;
+    rememberSearch(clean);
+    setIsOpen(false);
+    router.push(`/tim-kiem?keyword=${encodeURIComponent(clean)}`);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    executeSearch(keyword);
-  };
-
-  const clearSearch = () => {
-    setKeyword('');
-    setResults([]);
-  };
-
-  const closeAndClear = () => {
+  /**
+   * Đóng hộp thoại tìm kiếm và xóa từ khóa tạm
+   */
+  const closePalette = () => {
     setIsOpen(false);
     setKeyword('');
     setResults([]);
   };
 
   return (
-    <div ref={searchContainerRef} className="relative flex items-center">
-      {/* Search Input Container */}
-      <div
-        className={`flex items-center transition-all duration-300 ${
-          isOpen
-            ? 'w-64 border border-gray-600 bg-black/80 px-2 sm:w-80'
-            : 'w-8 border border-transparent bg-transparent px-0'
-        }`}
+    <>
+      {/* Nút kích hoạt Command Palette trên Header */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        aria-label="Mở tìm kiếm phim"
+        className="flex items-center gap-2 rounded-full border border-white/12 bg-[#14141A]/85 px-3 py-1.5 text-xs text-[#9A9AA8] transition hover:border-white/25 hover:bg-[#1E1E26] hover:text-white md:w-56 md:justify-between lg:w-64"
       >
-        <Search
-          className={`h-5 w-5 cursor-pointer text-white transition hover:text-gray-300 ${
-            !isOpen && 'ml-2' // Adjust icon position when closed
-          }`}
-          onClick={() => setIsOpen(true)}
-        />
+        <span className="flex items-center gap-2">
+          <Search className="h-4 w-4 text-white/80" />
+          <span className="hidden md:inline">Tìm phim, diễn viên...</span>
+        </span>
+        <kbd className="hidden rounded border border-white/10 bg-[#0A0A0D] px-1.5 py-0.5 font-mono text-[10px] text-[#9A9AA8] md:inline">
+          Ctrl K
+        </kbd>
+      </button>
 
-        <form
-          onSubmit={handleSubmit}
-          className={`flex w-full items-center overflow-hidden transition-all duration-300 ${
-            isOpen ? 'ml-2 opacity-100' : 'w-0 opacity-0'
-          }`}
+      {/* Modal Command Palette */}
+      {isOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Tìm kiếm nhanh phim"
+          onClick={() => setIsOpen(false)}
+          className="fixed inset-0 z-[70] flex items-start justify-center bg-black/75 px-4 pt-16 backdrop-blur-sm sm:pt-24"
         >
-          <input
-            type="text"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            placeholder="Tên phim, diễn viên..."
-            className="w-full bg-transparent py-2 text-sm text-white placeholder-gray-400 focus:outline-none"
-            autoFocus={isOpen}
-          />
-          {keyword && (
-            <button
-              type="button"
-              onClick={clearSearch}
-              className="mr-1 flex items-center justify-center rounded-full p-1 hover:bg-gray-800"
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-2xl overflow-hidden rounded-2xl border border-white/15 bg-[#14141A] shadow-[0_24px_80px_rgba(0,0,0,0.85)]"
+          >
+            {/* Ô nhập tìm kiếm */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                executeSearch(keyword);
+              }}
+              className="flex items-center gap-3 border-b border-white/10 px-4 py-3.5"
             >
-              <X className="h-4 w-4 text-gray-400" />
-            </button>
-          )}
-        </form>
-      </div>
-
-      {/* Auto-suggest Dropdown */}
-      {isOpen && (keyword.trim().length > 0 || recentSearches.length > 0) && (
-        <div className="bg-background absolute top-12 right-0 w-full min-w-[300px] overflow-hidden rounded-md border border-gray-700 shadow-2xl sm:min-w-[400px]">
-          {keyword.trim().length === 0 && recentSearches.length > 0 ? (
-            <div className="flex flex-col">
-              <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">
-                Tìm kiếm gần đây
-              </div>
-              {recentSearches.map((item) => (
+              <Search className="h-5 w-5 shrink-0 text-[#E50914]" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder="Nhập tên phim tiếng Việt hoặc tên gốc..."
+                className="w-full bg-transparent text-sm text-white placeholder-[#9A9AA8] focus:outline-none sm:text-base"
+              />
+              {keyword && (
                 <button
-                  key={item}
                   type="button"
-                  onClick={() => executeSearch(item)}
-                  className="flex items-center gap-3 border-b border-gray-800 p-3 text-left text-sm text-gray-200 transition-colors hover:bg-gray-800"
+                  onClick={() => setKeyword('')}
+                  aria-label="Xóa từ khóa"
+                  className="rounded-md p-1 text-[#9A9AA8] hover:bg-white/10 hover:text-white"
                 >
-                  <Search className="h-4 w-4 text-gray-500" />
-                  {item}
+                  <X className="h-4 w-4" />
                 </button>
-              ))}
-            </div>
-          ) : isLoading ? (
-            <div className="flex items-center justify-center p-6 text-gray-400">
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              <span className="text-sm">Đang tìm kiếm...</span>
-            </div>
-          ) : results.length > 0 ? (
-            <div className="flex flex-col">
-              <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">
-                Gợi ý phim
-              </div>
-              <div className="max-h-[60vh] overflow-y-auto">
-                {results.map((movie) => (
-                  <Link
-                    key={movie._id}
-                    href={`/xem-phim/${movie.slug}`}
-                    onClick={closeAndClear}
-                    className="flex items-center gap-3 border-b border-gray-800 p-3 transition-colors hover:bg-gray-800"
-                  >
-                    <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded shadow">
-                      <Image
-                        src={getImageUrl(movie.thumb_url)}
-                        alt={movie.name}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 48px) 100vw, 48px"
-                      />
-                    </div>
-                    <div className="flex-1 overflow-hidden">
-                      <h4 className="truncate text-sm font-semibold text-white">{movie.name}</h4>
-                      <p className="truncate text-xs text-gray-400">{movie.origin_name}</p>
-                      <p className="text-netflix mt-1 text-xs">{movie.year}</p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+              )}
               <button
                 type="button"
-                onClick={() => executeSearch(keyword)}
-                className="hover:text-netflix w-full bg-gray-900 p-3 text-center text-sm font-medium text-white transition-colors hover:bg-gray-800"
+                onClick={() => setIsOpen(false)}
+                className="rounded border border-white/10 bg-[#0A0A0D] px-2 py-1 text-[11px] font-medium text-[#9A9AA8] hover:text-white"
               >
-                Xem tất cả kết quả cho &quot;{keyword}&quot;
+                ESC
               </button>
+            </form>
+
+            {/* Khu vực kết quả / lịch sử */}
+            <div className="max-h-[62vh] overflow-y-auto p-3">
+              {keyword.trim().length < 2 ? (
+                recentSearches.length > 0 ? (
+                  <div>
+                    <div className="mb-2 flex items-center justify-between px-2">
+                      <span className="text-[11px] font-semibold tracking-wider text-[#9A9AA8] uppercase">
+                        Tìm kiếm gần đây
+                      </span>
+                      <button
+                        type="button"
+                        onClick={clearSearches}
+                        className="inline-flex items-center gap-1 text-[11px] text-[#9A9AA8] transition hover:text-[#E50914]"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Xóa
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2 px-2 pb-2">
+                      {recentSearches.map((term) => (
+                        <button
+                          key={term}
+                          type="button"
+                          onClick={() => executeSearch(term)}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#1E1E26] px-3 py-1.5 text-xs text-[#F2F2F5] transition hover:border-white/25"
+                        >
+                          <Clock className="h-3 w-3 text-[#9A9AA8]" />
+                          {term}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="py-10 text-center text-sm text-[#9A9AA8]">
+                    Nhập ít nhất 2 ký tự để tìm kiếm phim ngay lập tức.
+                  </p>
+                )
+              ) : showLoading ? (
+                <div className="flex items-center justify-center gap-2 py-10 text-sm text-[#9A9AA8]">
+                  <Loader2 className="h-5 w-5 animate-spin text-[#E50914]" />
+                  <span>Đang tìm phim...</span>
+                </div>
+              ) : visibleResults.length > 0 ? (
+                <div className="space-y-1">
+                  {visibleResults.map((movie) => {
+                    const score = getMovieScore(movie);
+                    return (
+                      <Link
+                        key={movie._id}
+                        href={`/phim/${movie.slug}`}
+                        onClick={closePalette}
+                        className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-[#1E1E26]"
+                      >
+                        <div className="relative h-16 w-11 shrink-0 overflow-hidden rounded-md bg-[#0A0A0D]">
+                          <ImageWithFallback
+                            src={getImageUrl(movie.poster_url || movie.thumb_url)}
+                            alt={movie.name}
+                            fill
+                            sizes="44px"
+                            className="object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="truncate text-sm font-semibold text-white">
+                            {movie.name}
+                          </h4>
+                          <p className="truncate text-xs text-[#9A9AA8]">{movie.origin_name}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[#9A9AA8]">
+                            {movie.year > 0 && <span>{movie.year}</span>}
+                            {movie.quality && (
+                              <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                {movie.quality}
+                              </span>
+                            )}
+                            {score && (
+                              <span className="inline-flex items-center gap-0.5 font-semibold text-[#F5C518]">
+                                <Star className="h-3 w-3 fill-[#F5C518]" />
+                                {score}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => executeSearch(keyword)}
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-[#0A0A0D] py-2.5 text-center text-xs font-semibold text-white transition hover:border-[#E50914]/50 hover:text-[#E50914]"
+                  >
+                    Xem toàn bộ kết quả cho &ldquo;{keyword.trim()}&rdquo;
+                  </button>
+                </div>
+              ) : (
+                <p className="py-10 text-center text-sm text-[#9A9AA8]">
+                  Không tìm thấy phim phù hợp với &ldquo;{keyword.trim()}&rdquo;.
+                </p>
+              )}
             </div>
-          ) : (
-            <div className="p-6 text-center text-sm text-gray-400">
-              Không tìm thấy kết quả nào cho &quot;{keyword}&quot;
-            </div>
-          )}
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

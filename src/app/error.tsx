@@ -8,29 +8,34 @@ interface ErrorPageProps {
   reset: () => void;
 }
 
+/**
+ * Trang xử lý lỗi toàn cục phong cách Rạp chiếu đêm với nút thử lại và quay về trang chủ
+ */
 export default function ErrorPage({ reset }: ErrorPageProps) {
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 pt-20 text-center">
-      <div className="max-w-md">
-        <AlertCircle className="mx-auto mb-5 h-14 w-14 text-red-500" />
-        <h1 className="mb-3 text-2xl font-bold text-white">Không tải được nội dung</h1>
-        <p className="mb-6 text-gray-400">
-          Dữ liệu phim có thể đang gián đoạn. Thử tải lại hoặc quay về trang chủ.
+    <div className="flex min-h-screen items-center justify-center bg-[#0A0A0D] px-4 pt-20 text-center">
+      <div className="max-w-md rounded-2xl border border-white/10 bg-[#14141A] p-8">
+        <AlertCircle className="mx-auto mb-4 h-12 w-12 text-[#E50914]" />
+        <h1 className="font-display mb-2 text-2xl font-bold tracking-wide text-white uppercase">
+          Không tải được nội dung
+        </h1>
+        <p className="mb-6 text-sm text-[#9A9AA8]">
+          Kết nối dữ liệu phim tạm thời gián đoạn. Vui lòng thử tải lại hoặc quay về trang chủ.
         </p>
         <div className="flex flex-wrap justify-center gap-3">
           <button
             type="button"
             onClick={reset}
-            className="inline-flex items-center gap-2 rounded-md bg-white px-5 py-2.5 font-semibold text-black transition-colors hover:bg-white/80"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#E50914] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#f40612]"
           >
             <RotateCcw className="h-4 w-4" />
             Thử lại
           </button>
           <Link
             href="/"
-            className="rounded-md bg-white/10 px-5 py-2.5 font-semibold text-white transition-colors hover:bg-white/20"
+            className="rounded-lg border border-white/15 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"
           >
-            Trang chủ
+            Về trang chủ
           </Link>
         </div>
       </div>
