@@ -2,6 +2,7 @@ import { User } from 'lucide-react';
 import type { Person } from '@/types';
 import { getTmdbImageUrl } from '@/lib/services/movie';
 import ImageWithFallback from '@/components/common/ImageWithFallback';
+import HorizontalRail from '@/components/common/HorizontalRail';
 
 interface CastListProps {
   peoples: Person[];
@@ -19,7 +20,7 @@ export default function CastList({
 }: CastListProps) {
   if (peoples.length > 0) {
     return (
-      <div className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
+      <HorizontalRail ariaLabel="Danh sách diễn viên" gapClassName="gap-4">
         {peoples.slice(0, 18).map((person) => {
           const photoUrl = getTmdbImageUrl(person.profile_path, profileBaseUrl);
           return (
@@ -53,7 +54,7 @@ export default function CastList({
             </div>
           );
         })}
-      </div>
+      </HorizontalRail>
     );
   }
 

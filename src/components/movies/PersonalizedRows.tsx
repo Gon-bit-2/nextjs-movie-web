@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Play, X } from 'lucide-react';
 import MovieCard from '@/components/common/MovieCard';
 import ImageWithFallback from '@/components/common/ImageWithFallback';
+import HorizontalRail from '@/components/common/HorizontalRail';
 import { getImageUrl } from '@/lib/services/movie';
 import { usePersonalization } from '@/hooks/usePersonalization';
 import type { Movie, MovieProgress, SavedMovie } from '@/types';
@@ -72,7 +73,7 @@ export function ContinueWatchingRow() {
         </h2>
       </div>
 
-      <div className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2">
+      <HorizontalRail ariaLabel="Tiếp tục xem" gapClassName="gap-4">
         {uniqueByMovie.slice(0, 8).map((progress) => {
           const remaining = getRemainingLabel(progress);
           const watchHref = `/xem-phim/${progress.slug}?tap=${progress.episodeIndex + 1}${
@@ -127,7 +128,7 @@ export function ContinueWatchingRow() {
             </article>
           );
         })}
-      </div>
+      </HorizontalRail>
     </section>
   );
 }

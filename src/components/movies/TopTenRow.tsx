@@ -3,13 +3,14 @@ import { Star } from 'lucide-react';
 import type { Movie } from '@/types';
 import { getImageUrl, getMovieScore } from '@/lib/services/movie';
 import ImageWithFallback from '@/components/common/ImageWithFallback';
+import HorizontalRail from '@/components/common/HorizontalRail';
 
 interface TopTenRowProps {
   movies: Movie[];
 }
 
 /**
- * Hàng điểm nhấn Top 10 Hôm Nay với chữ số Oswald viền rỗng xếp lớp cạnh poster dọc
+ * Hàng điểm nhấn Top 10 Hôm Nay hỗ trợ kéo chuột trái/phải và nút điều hướng hai mép
  */
 export default function TopTenRow({ movies }: TopTenRowProps) {
   const topMovies = movies.slice(0, 10);
@@ -28,7 +29,7 @@ export default function TopTenRow({ movies }: TopTenRowProps) {
         </div>
       </div>
 
-      <div className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3 md:gap-6">
+      <HorizontalRail ariaLabel="Top 10 hôm nay" gapClassName="gap-4 md:gap-6">
         {topMovies.map((movie, idx) => {
           const rank = idx + 1;
           const score = getMovieScore(movie);
@@ -37,6 +38,7 @@ export default function TopTenRow({ movies }: TopTenRowProps) {
             <Link
               key={movie._id}
               href={`/phim/${movie.slug}`}
+              draggable={false}
               className="group relative flex w-[210px] shrink-0 snap-start items-end sm:w-[235px] md:w-[255px]"
             >
               {/* Chữ số thứ tự cỡ lớn viền rỗng */}
@@ -60,6 +62,7 @@ export default function TopTenRow({ movies }: TopTenRowProps) {
                     src={getImageUrl(movie.poster_url || movie.thumb_url)}
                     alt={movie.name}
                     fill
+                    draggable={false}
                     sizes="(max-width: 640px) 150px, 190px"
                     className="object-cover transition duration-500 group-hover:scale-105"
                   />
@@ -81,7 +84,7 @@ export default function TopTenRow({ movies }: TopTenRowProps) {
             </Link>
           );
         })}
-      </div>
+      </HorizontalRail>
     </section>
   );
 }

@@ -36,6 +36,7 @@ export default function MovieCard({
     <article className="group flex flex-col">
       <Link
         href={`/phim/${movie.slug}`}
+        draggable={false}
         className={`relative block w-full overflow-hidden rounded-[10px] border border-white/10 bg-[#14141A] transition duration-300 group-hover:-translate-y-1 group-hover:border-white/25 group-hover:shadow-[0_14px_34px_rgba(0,0,0,0.65)] ${
           isPoster ? 'aspect-[2/3]' : 'aspect-video'
         }`}
@@ -44,6 +45,7 @@ export default function MovieCard({
           src={imageUrl}
           alt={movie.name}
           fill
+          draggable={false}
           priority={priority}
           sizes={
             isPoster
