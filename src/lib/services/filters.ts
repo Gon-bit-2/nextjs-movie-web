@@ -23,6 +23,31 @@ function pickSingle(value: string | string[] | undefined): string | undefined {
 }
 
 /**
+ * Kiểm tra và chuẩn hóa tham số năm đơn (YYYY) hoặc khoảng năm (YYYY,YYYY) hợp lệ
+ */
+export function parseYearFilter(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const maxYear = new Date().getFullYear() + 1;
+
+  const singleMatch = /^(\d{4})$/.exec(raw);
+  if (singleMatch) {
+    const year = Number(singleMatch[1]);
+    return year >= 1900 && year <= maxYear ? String(year) : undefined;
+  }
+
+  const rangeMatch = /^(\d{4}),(\d{4})$/.exec(raw);
+  if (rangeMatch) {
+    const start = Number(rangeMatch[1]);
+    const end = Number(rangeMatch[2]);
+    if (start >= 1900 && end <= maxYear && start <= end) {
+      return `${start},${end}`;
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Chuyển đổi searchParams trên URL thành đối tượng ListFilters hợp lệ cho API v1
  */
 export function parseListFilters(
@@ -34,15 +59,19 @@ export function parseListFilters(
   const sortTypeRaw = pickSingle(searchParams.sort_type);
   const sortLangRaw = pickSingle(searchParams.sort_lang);
 
-  const page = pageRaw ? Math.max(1, parseInt(pageRaw, 10) || 1) : undefined;
-  const limit = limitRaw ? Math.min(64, Math.max(1, parseInt(limitRaw, 10) || 24)) : undefined;
+  const pageParsed = pageRaw ? parseInt(pageRaw, 10) : NaN;
+  const limitParsed = limitRaw ? parseInt(limitRaw, 10) : NaN;
+
+  const page = Number.isFinite(pageParsed) && pageParsed > 0 ? pageParsed : undefined;
+  const limit =
+    Number.isFinite(limitParsed) && limitParsed > 0 ? Math.min(64, limitParsed) : undefined;
 
   return {
     page,
     limit,
     category: pickSingle(searchParams.category),
     country: pickSingle(searchParams.country),
-    year: pickSingle(searchParams.year),
+    year: parseYearFilter(pickSingle(searchParams.year)),
     sort_field:
       sortFieldRaw && VALID_SORT_FIELDS.has(sortFieldRaw as NonNullable<ListFilters['sort_field']>)
         ? (sortFieldRaw as ListFilters['sort_field'])

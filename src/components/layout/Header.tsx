@@ -179,8 +179,12 @@ export default function Header({ genres, countries }: HeaderProps) {
           <HeaderSearch />
 
           <Link
-            href="/#cua-toi"
-            className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-[#14141A]/80 px-3.5 py-1.5 text-xs font-semibold text-[#F2F2F5] transition hover:border-white/25 hover:bg-[#1E1E26] sm:inline-flex"
+            href="/cua-toi"
+            className={`hidden items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition sm:inline-flex ${
+              pathname === '/cua-toi'
+                ? 'border-[#E50914]/60 bg-[#E50914]/15 text-white'
+                : 'border-white/10 bg-[#14141A]/80 text-[#F2F2F5] hover:border-white/25 hover:bg-[#1E1E26]'
+            }`}
           >
             <Bookmark className="h-3.5 w-3.5 text-[#E50914]" />
             <span>Của tôi</span>

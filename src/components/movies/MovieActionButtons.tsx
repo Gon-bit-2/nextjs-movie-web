@@ -63,7 +63,7 @@ export default function MovieActionButtons({
 
       <button
         type="button"
-        onClick={() => toggleLike(movie.slug)}
+        onClick={() => toggleLike(movie)}
         aria-label={liked ? 'Bỏ yêu thích phim' : 'Yêu thích phim'}
         className={`inline-flex items-center justify-center gap-2 rounded-lg border text-sm font-semibold transition ${
           showLabels ? 'px-4 py-2.5' : 'h-11 w-11'

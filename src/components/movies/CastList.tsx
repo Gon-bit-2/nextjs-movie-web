@@ -1,4 +1,4 @@
-import { User } from 'lucide-react';
+import { ExternalLink, User } from 'lucide-react';
 import type { Person } from '@/types';
 import { getTmdbImageUrl } from '@/lib/services/movie';
 import ImageWithFallback from '@/components/common/ImageWithFallback';
@@ -11,7 +11,7 @@ interface CastListProps {
 }
 
 /**
- * Hàng diễn viên & nhân sự dạng chân dung tròn từ API /peoples (tự dự phòng danh sách tên nếu không có ảnh TMDB)
+ * Hàng diễn viên & nhân sự dạng chân dung tròn kèm liên kết hồ sơ TMDB (mở tab mới)
  */
 export default function CastList({
   peoples,
@@ -23,19 +23,20 @@ export default function CastList({
       <HorizontalRail ariaLabel="Danh sách diễn viên" gapClassName="gap-4">
         {peoples.slice(0, 18).map((person) => {
           const photoUrl = getTmdbImageUrl(person.profile_path, profileBaseUrl);
-          return (
-            <div
-              key={`${person.tmdb_people_id}-${person.name}`}
-              className="flex w-28 shrink-0 flex-col items-center text-center"
-            >
-              <div className="relative h-22 w-22 overflow-hidden rounded-full border border-white/15 bg-[#1E1E26]">
+          const hasTmdbProfile = Boolean(person.tmdb_people_id);
+          const tmdbUrl = `https://www.themoviedb.org/person/${person.tmdb_people_id}`;
+
+          const cardInner = (
+            <>
+              <div className="relative h-22 w-22 overflow-hidden rounded-full border border-white/15 bg-[#1E1E26] transition group-hover/cast:border-[#E50914]/70">
                 {photoUrl ? (
                   <ImageWithFallback
                     src={photoUrl}
                     alt={person.name}
                     fill
+                    draggable={false}
                     sizes="88px"
-                    className="object-cover"
+                    className="object-cover transition duration-300 group-hover/cast:scale-105"
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-[#9A9AA8]">
@@ -43,14 +44,42 @@ export default function CastList({
                   </div>
                 )}
               </div>
-              <p className="mt-2.5 line-clamp-1 text-xs font-semibold text-[#F2F2F5]">
-                {person.name}
+              <p className="mt-2.5 inline-flex max-w-full items-center gap-1 text-xs font-semibold text-[#F2F2F5] transition group-hover/cast:text-[#E50914]">
+                <span className="truncate">{person.name}</span>
+                {hasTmdbProfile && (
+                  <ExternalLink className="h-3 w-3 shrink-0 opacity-50 transition group-hover/cast:opacity-100" />
+                )}
               </p>
               {person.character && (
                 <p className="mt-0.5 line-clamp-1 text-[11px] text-[#9A9AA8]">
                   {person.character}
                 </p>
               )}
+            </>
+          );
+
+          if (hasTmdbProfile) {
+            return (
+              <a
+                key={`${person.tmdb_people_id}-${person.name}`}
+                href={tmdbUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                draggable={false}
+                title={`Xem hồ sơ ${person.name} trên TMDB`}
+                className="group/cast flex w-28 shrink-0 snap-start flex-col items-center text-center"
+              >
+                {cardInner}
+              </a>
+            );
+          }
+
+          return (
+            <div
+              key={`${person.tmdb_people_id}-${person.name}`}
+              className="group/cast flex w-28 shrink-0 snap-start flex-col items-center text-center"
+            >
+              {cardInner}
             </div>
           );
         })}

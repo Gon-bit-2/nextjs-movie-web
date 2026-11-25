@@ -247,12 +247,27 @@ export interface SavedMovie {
 }
 
 /**
- * Trạng thái yêu thích của một phim
+ * Ngôn ngữ server ưa thích của người dùng
+ */
+export type PreferredServerLang = 'vietsub' | 'thuyet-minh' | 'long-tieng';
+
+/**
+ * Trạng thái yêu thích của một phim (kèm thông tin hiển thị cho trang /cua-toi)
  */
 export interface MovieInteraction {
   slug: string;
   liked: boolean;
   updatedAt: number;
+  _id?: string;
+  name?: string;
+  origin_name?: string;
+  thumb_url?: string;
+  poster_url?: string;
+  year?: number;
+  quality?: string;
+  lang?: string;
+  episode_current?: string;
+  imdbScore?: number;
 }
 
 export interface GenreConfig {

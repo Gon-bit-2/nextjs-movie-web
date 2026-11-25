@@ -17,6 +17,7 @@ import MovieCard from '@/components/common/MovieCard';
 import MovieActionButtons from '@/components/movies/MovieActionButtons';
 import SmartWatchButton from '@/components/movies/SmartWatchButton';
 import MovieDetailTabs from '@/components/movies/MovieDetailTabs';
+import MovieJsonLd from '@/components/seo/MovieJsonLd';
 
 interface MovieDetailProps {
   params: Promise<{ slug: string }>;
@@ -87,6 +88,7 @@ export default async function MovieDetailPage({ params }: MovieDetailProps) {
 
   return (
     <div className="relative min-h-screen bg-[#0A0A0D] pb-16">
+      <MovieJsonLd movie={movie} peoples={peoplesRes.peoples} />
       {/* Ảnh nền Backdrop HD + hạt phim + chuyển sắc mượt vào nền tối */}
       <div className="relative h-[42vh] min-h-[300px] w-full overflow-hidden md:h-[58vh]">
         <ImageWithFallback

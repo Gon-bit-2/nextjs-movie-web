@@ -1,6 +1,12 @@
 'use client';
 
-import type { Movie, MovieInteraction, MovieProgress, SavedMovie } from '@/types';
+import type {
+  Movie,
+  MovieInteraction,
+  MovieProgress,
+  PreferredServerLang,
+  SavedMovie,
+} from '@/types';
 import { readStorageValue, writeStorageValue } from './client';
 
 export const WATCH_PROGRESS_KEY = 'movie-app:watch-progress:v1';
@@ -9,17 +15,19 @@ export const LIKES_KEY = 'movie-app:likes:v1';
 export const RECENT_SEARCHES_KEY = 'movie-app:recent-searches:v1';
 export const PLAYER_PREFS_KEY = 'movie-app:player-prefs:v1';
 
-const MAX_PROGRESS_ITEMS = 36;
+export const MAX_PROGRESS_ITEMS = 36;
 const MAX_RECENT_SEARCHES = 8;
 
 export interface PlayerPreferences {
   autoNext: boolean;
   lightsOff: boolean;
+  preferredLang: PreferredServerLang | null;
 }
 
-const DEFAULT_PLAYER_PREFS: PlayerPreferences = {
+export const DEFAULT_PLAYER_PREFS: PlayerPreferences = {
   autoNext: true,
   lightsOff: false,
+  preferredLang: null,
 };
 
 /**
@@ -87,8 +95,8 @@ export function saveWatchProgress(progress: MovieProgress): void {
     Boolean(progress.completed) ||
     Boolean(
       progress.duration &&
-      progress.duration > 0 &&
-      progress.currentTime / progress.duration >= 0.92,
+        progress.duration > 0 &&
+        progress.currentTime / progress.duration >= 0.92,
     );
 
   const normalized: MovieProgress = {
@@ -127,6 +135,13 @@ export function removeWatchProgress(slug: string): void {
 }
 
 /**
+ * Xóa toàn bộ lịch sử xem phim của người dùng
+ */
+export function clearAllWatchProgress(): void {
+  writeStorageValue(WATCH_PROGRESS_KEY, []);
+}
+
+/**
  * Xóa tiến độ của riêng một tập phim khi người dùng chọn Xem lại từ đầu
  */
 export function clearEpisodeProgress(slug: string, episodeIndex: number): void {
@@ -146,7 +161,7 @@ export function clearEpisodeProgress(slug: string, episodeIndex: number): void {
 }
 
 /**
- * Đọc tùy chọn trình phát (tự chuyển tập, tắt đèn)
+ * Đọc tùy chọn trình phát (tự chuyển tập, tắt đèn, ngôn ngữ server ưa thích)
  */
 export function getPlayerPreferences(): PlayerPreferences {
   return {
@@ -213,10 +228,22 @@ export function toggleSavedMovie(movie: Movie): boolean {
 }
 
 /**
+ * Xóa một phim khỏi Danh sách của tôi theo slug
+ */
+export function removeSavedMovie(slug: string): void {
+  writeStorageValue(
+    MY_LIST_KEY,
+    getMyList().filter((item) => item.slug !== slug),
+  );
+}
+
+/**
  * Lấy danh sách trạng thái yêu thích
  */
 export function getLikes(): MovieInteraction[] {
-  return readStorageValue<MovieInteraction[]>(LIKES_KEY, []);
+  return readStorageValue<MovieInteraction[]>(LIKES_KEY, []).sort(
+    (a, b) => b.updatedAt - a.updatedAt,
+  );
 }
 
 /**
@@ -227,16 +254,38 @@ export function isMovieLiked(slug: string): boolean {
 }
 
 /**
- * Bật hoặc tắt trạng thái yêu thích của một phim
+ * Bật hoặc tắt trạng thái yêu thích của một phim (lưu kèm metadata khi truyền đầy đủ đối tượng Movie)
  */
-export function toggleMovieLike(slug: string): boolean {
+export function toggleMovieLike(movieOrSlug: Movie | string): boolean {
+  const slug = typeof movieOrSlug === 'string' ? movieOrSlug : movieOrSlug.slug;
+  const movie = typeof movieOrSlug === 'string' ? null : movieOrSlug;
+
   const interactions = getLikes();
   const current = interactions.find((item) => item.slug === slug);
   const nextLiked = !current?.liked;
-  const next = [
-    { slug, liked: nextLiked, updatedAt: Date.now() },
-    ...interactions.filter((item) => item.slug !== slug),
-  ];
+
+  const entry: MovieInteraction = {
+    ...(current ?? {}),
+    slug,
+    liked: nextLiked,
+    updatedAt: Date.now(),
+    ...(movie
+      ? {
+          _id: movie._id,
+          name: movie.name,
+          origin_name: movie.origin_name,
+          thumb_url: movie.thumb_url,
+          poster_url: movie.poster_url,
+          year: movie.year,
+          quality: movie.quality,
+          lang: movie.lang,
+          episode_current: movie.episode_current,
+          imdbScore: movie.imdb?.vote_average || movie.tmdb?.vote_average,
+        }
+      : {}),
+  };
+
+  const next = [entry, ...interactions.filter((item) => item.slug !== slug)];
 
   writeStorageValue(LIKES_KEY, next);
   return nextLiked;

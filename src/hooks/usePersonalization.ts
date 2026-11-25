@@ -4,11 +4,13 @@ import { useCallback, useSyncExternalStore } from 'react';
 import type { Movie, MovieInteraction, MovieProgress, SavedMovie } from '@/types';
 import { STORAGE_EVENT } from '@/lib/storage/client';
 import {
+  DEFAULT_PLAYER_PREFS,
   LIKES_KEY,
   MY_LIST_KEY,
   PLAYER_PREFS_KEY,
   RECENT_SEARCHES_KEY,
   WATCH_PROGRESS_KEY,
+  clearAllWatchProgress,
   clearRecentSearches,
   getLikes,
   getMyList,
@@ -17,6 +19,7 @@ import {
   getWatchProgress,
   isMovieLiked,
   isMovieSaved,
+  removeSavedMovie,
   removeWatchProgress,
   savePlayerPreferences,
   saveRecentSearch,
@@ -38,7 +41,7 @@ const EMPTY_STATE: PersonalizationState = {
   watchProgress: [],
   likes: [],
   recentSearches: [],
-  playerPrefs: { autoNext: true, lightsOff: false },
+  playerPrefs: DEFAULT_PLAYER_PREFS,
 };
 
 const STORAGE_KEYS = [
@@ -110,8 +113,10 @@ function getStorageVersion(): string {
  */
 export function usePersonalization(): PersonalizationState & {
   toggleSaved: (movie: Movie) => boolean;
-  toggleLike: (slug: string) => boolean;
+  removeSaved: (slug: string) => void;
+  toggleLike: (movieOrSlug: Movie | string) => boolean;
   removeProgress: (slug: string) => void;
+  clearAllProgress: () => void;
   rememberSearch: (keyword: string) => void;
   clearSearches: () => void;
   updatePlayerPrefs: (partial: Partial<PlayerPreferences>) => PlayerPreferences;
@@ -121,9 +126,15 @@ export function usePersonalization(): PersonalizationState & {
   const state = useSyncExternalStore(subscribe, getSnapshot, () => EMPTY_STATE);
 
   const toggleSaved = useCallback((movie: Movie) => toggleSavedMovie(movie), []);
-  const toggleLike = useCallback((slug: string) => toggleMovieLike(slug), []);
+  const removeSaved = useCallback((slug: string) => {
+    removeSavedMovie(slug);
+  }, []);
+  const toggleLike = useCallback((movieOrSlug: Movie | string) => toggleMovieLike(movieOrSlug), []);
   const removeProgress = useCallback((slug: string) => {
     removeWatchProgress(slug);
+  }, []);
+  const clearAllProgress = useCallback(() => {
+    clearAllWatchProgress();
   }, []);
   const rememberSearch = useCallback((keyword: string) => {
     saveRecentSearch(keyword);
@@ -139,8 +150,10 @@ export function usePersonalization(): PersonalizationState & {
   return {
     ...state,
     toggleSaved,
+    removeSaved,
     toggleLike,
     removeProgress,
+    clearAllProgress,
     rememberSearch,
     clearSearches,
     updatePlayerPrefs,

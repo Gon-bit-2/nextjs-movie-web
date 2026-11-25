@@ -1,10 +1,11 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Be_Vietnam_Pro, Oswald } from 'next/font/google';
 import './globals.css';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import MobileBottomNav from '@/components/layout/MobileBottomNav';
 import { getCountries, getGenres } from '@/lib/services/movie';
+import { getSiteUrl } from '@/lib/config/site';
 import { FALLBACK_GENRES, FEATURED_COUNTRIES } from '@/config/navigation';
 
 const beVietnamPro = Be_Vietnam_Pro({
@@ -21,13 +22,24 @@ const oswald = Oswald({
   display: 'swap',
 });
 
+export const viewport: Viewport = {
+  themeColor: '#0A0A0D',
+  colorScheme: 'dark',
+};
+
 export const metadata: Metadata = {
+  metadataBase: new URL(getSiteUrl()),
   title: {
     default: 'PHIMHAY - Rạp chiếu đêm trực tuyến',
     template: '%s | PHIMHAY',
   },
   description:
     'Xem phim trực tuyến mượt mà chất lượng cao Full HD, Vietsub, Thuyết minh, Lồng tiếng cập nhật mỗi ngày trên PHIMHAY.',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'PHIMHAY',
+  },
 };
 
 /**

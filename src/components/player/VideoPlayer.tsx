@@ -3,7 +3,7 @@
 import '@vidstack/react/player/styles/default/theme.css';
 import '@vidstack/react/player/styles/default/layouts/video.css';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { preconnect } from 'react-dom';
 import {
   MediaPlayer,
@@ -31,6 +31,12 @@ import { useWatchProgress } from './useWatchProgress';
 import EmbedFallback from './EmbedFallback';
 import ResumePrompt from './ResumePrompt';
 import NextEpisodeOverlay from './NextEpisodeOverlay';
+import SkipIntroButton from './SkipIntroButton';
+
+const SKIP_INTRO_SECONDS = 85;
+const SKIP_INTRO_WINDOW_MIN = 5;
+const SKIP_INTRO_WINDOW_MAX = 180;
+const MIN_DURATION_FOR_INTRO_SKIP = 600;
 
 interface VideoPlayerProps {
   episodes: EpisodeItem[];
@@ -45,6 +51,10 @@ interface VideoPlayerProps {
   autoNext: boolean;
   useEmbedMode: boolean;
   restartSignal: number;
+  /** Mốc thời gian khởi phát truyền qua URL (?t=...) */
+  initialStartTime?: number;
+  /** Ref nhận thời điểm phát hiện tại để chia sẻ link mà không gây re-render */
+  currentTimeRef?: MutableRefObject<number>;
   onToggleEmbedMode: (useEmbed: boolean) => void;
   onSelectEpisode: (episodeIndex: number) => void;
   onSuggestNextServer: () => void;
@@ -52,7 +62,7 @@ interface VideoPlayerProps {
 }
 
 /**
- * Trình phát phim chính sử dụng Vidstack + hls.js (VOD), hỗ trợ đổi tập không reload và tự dự phòng Embed
+ * Trình phát phim chính sử dụng Vidstack + hls.js (VOD), nhớ tốc độ/âm lượng, bỏ qua intro và dự phòng Embed
  */
 export default function VideoPlayer({
   episodes,
@@ -67,6 +77,8 @@ export default function VideoPlayer({
   autoNext,
   useEmbedMode,
   restartSignal,
+  initialStartTime,
+  currentTimeRef,
   onToggleEmbedMode,
   onSelectEpisode,
   onSuggestNextServer,
@@ -75,11 +87,14 @@ export default function VideoPlayer({
   const playerRef = useRef<MediaPlayerInstance | null>(null);
   const warmedEpisodeRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
+  const appliedUrlStartRef = useRef(false);
 
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [resumeSeconds, setResumeSeconds] = useState<number>(0);
   const [showNextOverlay, setShowNextOverlay] = useState<boolean>(false);
   const [nextDismissed, setNextDismissed] = useState<boolean>(false);
+  const [showSkipIntro, setShowSkipIntro] = useState<boolean>(false);
+  const [skipIntroUsed, setSkipIntroUsed] = useState<boolean>(false);
   const [retryNonce, setRetryNonce] = useState<number>(0);
 
   const episode = episodes[currentEpisodeIndex];
@@ -103,17 +118,27 @@ export default function VideoPlayer({
     serverIndex: currentServerIndex,
   });
 
-  // Đặt lại trạng thái lỗi, gợi ý tiếp tục và làm nóng khi đổi tập hoặc đổi server
+  // Đặt lại trạng thái lỗi, gợi ý tiếp tục, bỏ qua intro khi đổi tập hoặc đổi server
   useEffect(() => {
     retryCountRef.current = 0;
     warmedEpisodeRef.current = null;
+    if (currentTimeRef) currentTimeRef.current = 0;
+
     setFatalError(null);
     setShowNextOverlay(false);
     setNextDismissed(false);
+    setShowSkipIntro(false);
+    setSkipIntroUsed(false);
+
+    // Nếu đang mở bằng link chia sẻ có ?t= thì không hiện hộp hỏi tiếp tục cũ
+    if (initialStartTime && initialStartTime > 0 && !appliedUrlStartRef.current) {
+      setResumeSeconds(0);
+      return;
+    }
 
     const saved = readSavedTime();
     setResumeSeconds(saved);
-  }, [currentEpisodeIndex, currentServerIndex, readSavedTime]);
+  }, [currentEpisodeIndex, currentServerIndex, currentTimeRef, initialStartTime, readSavedTime]);
 
   // Xử lý yêu cầu Xem lại từ đầu từ thanh tiện ích bên ngoài
   useEffect(() => {
@@ -121,6 +146,7 @@ export default function VideoPlayer({
     resetCurrentProgress();
     setResumeSeconds(0);
     setShowNextOverlay(false);
+    setSkipIntroUsed(false);
     if (playerRef.current) {
       playerRef.current.currentTime = 0;
       void playerRef.current.play().catch(() => {});
@@ -138,7 +164,7 @@ export default function VideoPlayer({
   }, []);
 
   /**
-   * Đồng bộ tiến độ phát, làm nóng playlist tập tiếp theo ở mốc 85% và mở lớp phủ tự chuyển tập
+   * Đồng bộ tiến độ phát, hiển thị nút Bỏ qua 85s, làm nóng tập kế tiếp và lớp phủ tự chuyển tập
    */
   const handleTimeUpdate = useCallback(
     (detail: MediaTimeUpdateEventDetail) => {
@@ -146,7 +172,19 @@ export default function VideoPlayer({
       const duration = player?.duration ?? 0;
       const currentTime = detail.currentTime;
 
+      if (currentTimeRef) {
+        currentTimeRef.current = currentTime;
+      }
+
       reportTime(currentTime, duration);
+
+      // Hiện nút Bỏ qua intro trong cửa sổ 5s..180s đối với phim dài > 10 phút
+      const shouldShowSkip =
+        !skipIntroUsed &&
+        duration > MIN_DURATION_FOR_INTRO_SKIP &&
+        currentTime >= SKIP_INTRO_WINDOW_MIN &&
+        currentTime <= SKIP_INTRO_WINDOW_MAX;
+      setShowSkipIntro((prev) => (prev === shouldShowSkip ? prev : shouldShowSkip));
 
       if (duration > 60 && nextEpisode) {
         const progressRatio = currentTime / duration;
@@ -161,16 +199,39 @@ export default function VideoPlayer({
         }
       }
     },
-    [autoNext, currentEpisodeIndex, nextDismissed, nextEpisode, reportTime],
+    [
+      autoNext,
+      currentEpisodeIndex,
+      currentTimeRef,
+      nextDismissed,
+      nextEpisode,
+      reportTime,
+      skipIntroUsed,
+    ],
   );
 
   /**
-   * Xử lý khi trình phát sẵn sàng: thử tự động phát và ẩn lỗi cũ
+   * Xử lý khi trình phát sẵn sàng: xóa lỗi cũ và tua 1 lần đến mốc ?t= nếu có
    */
   const handleCanPlay = useCallback(() => {
     setFatalError(null);
     retryCountRef.current = 0;
-  }, []);
+
+    if (
+      initialStartTime &&
+      initialStartTime > 0 &&
+      !appliedUrlStartRef.current &&
+      playerRef.current
+    ) {
+      appliedUrlStartRef.current = true;
+      const duration = playerRef.current.duration;
+      const clamped =
+        duration && Number.isFinite(duration)
+          ? Math.min(initialStartTime, Math.max(0, duration - 5))
+          : initialStartTime;
+      playerRef.current.currentTime = clamped;
+    }
+  }, [initialStartTime]);
 
   /**
    * Xử lý lỗi phát luồng: tự thử lại tối đa 2 lần, sau đó hiển thị bảng lựa chọn dự phòng
@@ -198,6 +259,22 @@ export default function VideoPlayer({
       setShowNextOverlay(true);
     }
   }, [autoNext, flushProgress, nextEpisode, onPlayingChange]);
+
+  /**
+   * Tua nhanh thêm 85 giây để bỏ qua phần mở đầu
+   */
+  const handleSkipIntro = useCallback(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    const duration = player.duration || 0;
+    const target =
+      duration > 0
+        ? Math.min(duration - 5, player.currentTime + SKIP_INTRO_SECONDS)
+        : player.currentTime + SKIP_INTRO_SECONDS;
+    player.currentTime = target;
+    setSkipIntroUsed(true);
+    setShowSkipIntro(false);
+  }, []);
 
   /**
    * Tua nhanh đến mốc thời gian đã lưu khi người dùng đồng ý tiếp tục xem
@@ -278,6 +355,7 @@ export default function VideoPlayer({
         className="phimhay-player"
         title={`${movieName} — ${episode.name}`}
         src={{ src: streamSrc, type: 'application/x-mpegurl' }}
+        storage="phimhay-player"
         viewType="video"
         streamType="on-demand"
         load="eager"
@@ -320,6 +398,11 @@ export default function VideoPlayer({
           onRestart={handleRestartFromPrompt}
           onDismiss={() => setResumeSeconds(0)}
         />
+      )}
+
+      {/* Nút Bỏ qua intro +85s */}
+      {showSkipIntro && !showNextOverlay && !fatalError && (
+        <SkipIntroButton onSkip={handleSkipIntro} />
       )}
 
       {/* Lớp phủ tự chuyển tập tiếp theo */}

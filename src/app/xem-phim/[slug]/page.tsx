@@ -30,11 +30,11 @@ export async function generateMetadata({
 }
 
 /**
- * Trang xem phim (/xem-phim/[slug]): tải dữ liệu phim 1 lần từ server và giao quyền chuyển tập mượt cho client
+ * Trang xem phim (/xem-phim/[slug]): đọc tham số ?tap, ?server và ?t (mốc thời gian chia sẻ)
  */
 export default async function WatchPage({ params, searchParams }: WatchPageProps) {
   const { slug } = await params;
-  const { tap, server } = await searchParams;
+  const { tap, server, t } = await searchParams;
 
   const data = await getMovieDetail(slug);
   if (!data || !data.movie) return notFound();
@@ -42,7 +42,9 @@ export default async function WatchPage({ params, searchParams }: WatchPageProps
   const servers = data.episodes || [];
   const serverParam = Array.isArray(server) ? server[0] : server;
   const tapParam = Array.isArray(tap) ? tap[0] : tap;
+  const timeParam = Array.isArray(t) ? t[0] : t;
 
+  const hasExplicitServerParam = Boolean(serverParam && serverParam.trim());
   const parsedServerIndex = serverParam ? Math.max(0, parseInt(serverParam, 10) - 1) : 0;
   const safeServerIndex =
     parsedServerIndex >= 0 && parsedServerIndex < servers.length ? parsedServerIndex : 0;
@@ -51,6 +53,10 @@ export default async function WatchPage({ params, searchParams }: WatchPageProps
   const parsedEpIndex = tapParam ? Math.max(0, parseInt(tapParam, 10) - 1) : 0;
   const safeEpIndex =
     parsedEpIndex >= 0 && parsedEpIndex < serverEpisodes.length ? parsedEpIndex : 0;
+
+  const parsedStartTime = timeParam ? parseInt(timeParam, 10) : NaN;
+  const initialStartTime =
+    Number.isFinite(parsedStartTime) && parsedStartTime > 0 ? parsedStartTime : undefined;
 
   // Lấy phim cùng thể loại đầu tiên để đề xuất bên dưới khung phát
   const firstGenreSlug = data.movie.category?.[0]?.slug;
@@ -66,7 +72,9 @@ export default async function WatchPage({ params, searchParams }: WatchPageProps
       movie={data.movie}
       servers={servers}
       initialServerIndex={safeServerIndex}
+      hasExplicitServerParam={hasExplicitServerParam}
       initialEpisodeIndex={safeEpIndex}
+      initialStartTime={initialStartTime}
       relatedMovies={relatedMovies}
     />
   );

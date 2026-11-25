@@ -20,6 +20,28 @@ interface FilterBarProps {
   extraParams?: Record<string, string | undefined>;
 }
 
+const CURRENT_YEAR = new Date().getFullYear();
+
+const YEAR_RANGE_OPTIONS = [
+  { value: `2020,${CURRENT_YEAR}`, label: `2020–${CURRENT_YEAR}` },
+  { value: '2010,2019', label: '2010–2019' },
+  { value: '2000,2009', label: '2000–2009' },
+  { value: '1950,1999', label: 'Trước 2000' },
+] as const;
+
+/**
+ * Định dạng nhãn hiển thị thân thiện cho giá trị năm đơn hoặc khoảng năm
+ */
+function formatYearChipLabel(yearValue: string): string {
+  const preset = YEAR_RANGE_OPTIONS.find((opt) => opt.value === yearValue);
+  if (preset) return preset.label;
+  if (yearValue.includes(',')) {
+    const [start, end] = yearValue.split(',');
+    return `${start}–${end}`;
+  }
+  return `Năm ${yearValue}`;
+}
+
 /**
  * Thanh bộ lọc đa tiêu chí đồng bộ trực tiếp với query string để lọc và sắp xếp phía server
  */
@@ -68,7 +90,7 @@ export default function FilterBar({
     activeChips.push({ key: 'country', label });
   }
   if (!hideYear && filters.year) {
-    activeChips.push({ key: 'year', label: `Năm ${filters.year}` });
+    activeChips.push({ key: 'year', label: formatYearChipLabel(filters.year) });
   }
   if (filters.sort_lang) {
     const label =
@@ -121,11 +143,20 @@ export default function FilterBar({
           className={selectClass}
         >
           <option value="">Tất cả năm</option>
-          {years.slice(0, 35).map((year) => (
-            <option key={year} value={String(year)}>
-              {year}
-            </option>
-          ))}
+          <optgroup label="Khoảng năm">
+            {YEAR_RANGE_OPTIONS.map((range) => (
+              <option key={range.value} value={range.value}>
+                {range.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Năm cụ thể">
+            {years.slice(0, 35).map((year) => (
+              <option key={year} value={String(year)}>
+                {year}
+              </option>
+            ))}
+          </optgroup>
         </select>
       )}
 

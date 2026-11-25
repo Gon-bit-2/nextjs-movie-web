@@ -42,7 +42,7 @@ export default function MobileBottomNav() {
       icon: PlayCircle,
       active: false,
     },
-    { href: '/#cua-toi', label: 'Của tôi', icon: Bookmark, active: false },
+    { href: '/cua-toi', label: 'Của tôi', icon: Bookmark, active: pathname === '/cua-toi' },
   ];
 
   return (

@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
   ArrowLeft,
+  Check,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -13,21 +14,29 @@ import {
   Maximize2,
   Minimize2,
   RotateCcw,
+  Share2,
   Star,
   X,
 } from 'lucide-react';
 import type { Episode, Movie, MovieDetail } from '@/types';
 import { getMovieScore } from '@/lib/services/movie';
+import {
+  findPreferredServerIndex,
+  normalizeServerLang,
+} from '@/lib/player/server-preference';
 import { usePersonalization } from '@/hooks/usePersonalization';
 import MovieCard from '@/components/common/MovieCard';
 import VideoPlayer from './VideoPlayer';
 import EpisodePanel from './EpisodePanel';
+import { formatDurationTime } from './useVidstackHls';
 
 interface WatchExperienceProps {
   movie: MovieDetail;
   servers: Episode[];
   initialServerIndex: number;
+  hasExplicitServerParam: boolean;
   initialEpisodeIndex: number;
+  initialStartTime?: number;
   relatedMovies: Movie[];
 }
 
@@ -44,18 +53,22 @@ const KEYBOARD_SHORTCUTS = [
 ];
 
 /**
- * Không gian xem phim toàn diện trên client: đổi tập không tải lại trang, tắt đèn, chế độ rạp và phím tắt
+ * Không gian xem phim toàn diện trên client: ưu tiên ngôn ngữ server, đổi tập không reload, chia sẻ mốc thời gian
  */
 export default function WatchExperience({
   movie,
   servers,
   initialServerIndex,
+  hasExplicitServerParam,
   initialEpisodeIndex,
+  initialStartTime,
   relatedMovies,
 }: WatchExperienceProps) {
   const { playerPrefs, updatePlayerPrefs } = usePersonalization();
+  const currentTimeRef = useRef(0);
 
-  const [serverIndex, setServerIndex] = useState(initialServerIndex);
+  // State dẫn xuất cho server: ưu tiên chọn tay -> tham số URL -> ngôn ngữ ưa thích -> mặc định
+  const [manualServerIndex, setManualServerIndex] = useState<number | null>(null);
   const [episodeIndex, setEpisodeIndex] = useState(initialEpisodeIndex);
   const [isTheaterMode, setIsTheaterMode] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -63,8 +76,15 @@ export default function WatchExperience({
   const [restartSignal, setRestartSignal] = useState(0);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [expandSynopsis, setExpandSynopsis] = useState(false);
+  const [shareToast, setShareToast] = useState<string | null>(null);
 
-  const safeServerIndex = serverIndex >= 0 && serverIndex < servers.length ? serverIndex : 0;
+  const preferredServerIdx = !hasExplicitServerParam
+    ? findPreferredServerIndex(servers, playerPrefs.preferredLang)
+    : null;
+  const resolvedServerIndex = manualServerIndex ?? preferredServerIdx ?? initialServerIndex;
+  const safeServerIndex =
+    resolvedServerIndex >= 0 && resolvedServerIndex < servers.length ? resolvedServerIndex : 0;
+
   const currentServer = servers[safeServerIndex];
   const episodes = currentServer?.server_data || [];
   const safeEpisodeIndex =
@@ -105,19 +125,24 @@ export default function WatchExperience({
   );
 
   /**
-   * Đổi server phát và tự giữ đúng số tập tương ứng (nếu server mới có)
+   * Đổi server phát, ghi nhớ ngôn ngữ ưa thích và giữ đúng số tập tương ứng
    */
   const handleSelectServer = useCallback(
     (nextServer: number) => {
       if (nextServer < 0 || nextServer >= servers.length) return;
       const nextList = servers[nextServer]?.server_data || [];
       const clampedEp = Math.min(safeEpisodeIndex, Math.max(0, nextList.length - 1));
-      setServerIndex(nextServer);
+      setManualServerIndex(nextServer);
       setEpisodeIndex(clampedEp);
       setUseEmbedMode(false);
       syncUrl(clampedEp, nextServer);
+
+      const detectedLang = normalizeServerLang(servers[nextServer]?.server_name);
+      if (detectedLang) {
+        updatePlayerPrefs({ preferredLang: detectedLang });
+      }
     },
-    [safeEpisodeIndex, servers, syncUrl],
+    [safeEpisodeIndex, servers, syncUrl, updatePlayerPrefs],
   );
 
   /**
@@ -128,6 +153,31 @@ export default function WatchExperience({
     const nextServer = (safeServerIndex + 1) % servers.length;
     handleSelectServer(nextServer);
   }, [handleSelectServer, safeServerIndex, servers.length]);
+
+  /**
+   * Sao chép liên kết xem phim kèm chính xác mốc thời gian hiện tại (?t=...)
+   */
+  const handleShareTimestamp = async () => {
+    if (typeof window === 'undefined') return;
+    const sec = Math.floor(currentTimeRef.current);
+    const params = new URLSearchParams({
+      tap: String(safeEpisodeIndex + 1),
+      server: String(safeServerIndex + 1),
+    });
+    if (sec > 5) {
+      params.set('t', String(sec));
+    }
+    const shareUrl = `${window.location.origin}/xem-phim/${movie.slug}?${params.toString()}`;
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareToast(sec > 5 ? `Đã chép tại ${formatDurationTime(sec)}` : 'Đã chép link xem');
+      window.setTimeout(() => setShareToast(null), 2400);
+    } catch {
+      // Dự phòng nếu trình duyệt không hỗ trợ clipboard
+      window.prompt('Sao chép liên kết xem phim:', shareUrl);
+    }
+  };
 
   // Đăng ký phím tắt điều hướng tập, chế độ rạp và trợ giúp phím tắt
   useEffect(() => {
@@ -290,6 +340,8 @@ export default function WatchExperience({
                 autoNext={playerPrefs.autoNext}
                 useEmbedMode={useEmbedMode}
                 restartSignal={restartSignal}
+                initialStartTime={initialStartTime}
+                currentTimeRef={currentTimeRef}
                 onToggleEmbedMode={setUseEmbedMode}
                 onSelectEpisode={handleSelectEpisode}
                 onSuggestNextServer={handleSuggestNextServer}
@@ -325,6 +377,18 @@ export default function WatchExperience({
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   Xem lại từ đầu
+                </button>
+                <button
+                  type="button"
+                  onClick={handleShareTimestamp}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-[#F2F2F5] transition hover:bg-white/15"
+                >
+                  {shareToast ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                  ) : (
+                    <Share2 className="h-3.5 w-3.5" />
+                  )}
+                  <span>{shareToast ?? 'Chia sẻ mốc xem'}</span>
                 </button>
               </div>
 

@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // File mẫu của agent skills và Stitch, không thuộc mã nguồn ứng dụng
+    ".agents/**",
+    ".stitch/**",
   ]),
 ]);
 
